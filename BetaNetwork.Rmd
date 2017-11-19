@@ -1,0 +1,483 @@
+---
+title: "Beta"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+    theme: spacelab
+    keep_md: true
+---
+
+```{r,warning=FALSE,message=FALSE,echo=FALSE,cache=FALSE}
+library(chron)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(knitr)
+library(R2jags)
+library(dplyr)
+library(stringr)
+library(gridExtra)
+library(boot)
+library(bipartite)
+
+opts_chunk$set(message=FALSE,warning=FALSE,fig.width=10,fig.height=7,echo=TRUE,cache=F,fig.align='center',fig.path="figureObserved/")
+
+#source functions
+source("models/Functions.R")
+
+newModel<-T
+```
+
+
+```{r,echo=F,cache=FALSE}
+paste("Run Completed at",Sys.time())
+```
+
+```{r}
+#reload if needed
+#load("Observed.RData")
+```
+
+#Load in data
+
+```{r}
+#read in flower morphology data, comes from Nectar.R
+fl.morph<-read.csv("data/FlowerMorphology.csv")
+
+#use effective corolla where possible.
+fl.morph$Corolla<-fl.morph$EffectiveCorolla
+
+fl.morph[is.na(fl.morph$Corolla),"Corolla"]<-fl.morph[is.na(fl.morph$Corolla),"TotalCorolla"]
+
+#fuchsia macrostigma has an undue influence on this analysis, being 3x longer than other flowers, its not clear that birds really have to reach down the full corolla lenghth, use effective corolla length.
+#fl.morph[fl.morph$Group.1 %in% "Fuchsia macrostigma","Corolla"]<-50
+
+#First row is empty
+fl.morph<-fl.morph[-1,]
+
+#Bring in Hummingbird Morphology Dataset, comes from
+hum.morph<-read.csv("data/HummingbirdMorphology.csv")
+
+#taxonomy change, we are calling them Crowned Woodnymph's now.
+hum.morph$English<-as.character(hum.morph$English)
+
+hum.morph$English[hum.morph$English %in% "Green-crowned Woodnymph"]<-"Crowned Woodnymph"
+
+#Bring in Interaction Matrix
+int<-read.csv("data/HummingbirdInteractions.csv")
+
+int$timestamp<-as.POSIXct(paste(int$Time,int$DateP),format="%H:%M:%S %Y-%m-%d")
+
+#one date error
+int[int$DateP %in% '2013-07-25',"Month"]<-7
+
+#one duplicate camera error, perhaps two GPS records.
+int<-int[!(int$ID %in% "FH1108" & int$Date_F %in% '2014-12-01'),]
+
+#Correct known taxonomic disagreements, atleast compared to traits
+int[int$Iplant_Double %in% "Onagaraceae fuschia","Iplant_Double"]<-"Fuchsia macrostigma"
+int[int$Iplant_Double=="Alloplectus purpureus","Iplant_Double"]<-"Glossoloma purpureum"
+int[int$Iplant_Double=="Capanea affinis","Iplant_Double"]<-"Kohleria affinis"
+int[int$Iplant_Double=="Columnea cinerea","Iplant_Double"]<-"Columnea mastersonii"
+int[int$Iplant_Double=="Alloplectus teuscheri","Iplant_Double"]<-"Drymonia teuscheri"
+int[int$Iplant_Double=="Drymonia collegarum","Iplant_Double"]<-"Alloplectus tetragonoides"
+
+#Some reasonable level of presences, 4 points
+keep<-names(which(table(int$Hummingbird) > 4))
+
+#int<-int[int$Hummingbird %in% keep & !int$Hummingbird %in% c("Sparkling Violetear"),]
+
+m.dat<-droplevels(int[colnames(int) %in% c("ID","Video","Time","Hummingbird","Sex","timestamp","TransectID","Transect_R","Iplant_Double","Pierce","DateP","Month","ele","Type")])
+
+#Does the data come from camera or transect?
+m.dat$Type<-(is.na(m.dat$TransectID))*1
+
+m.dat$Year<-years(as.Date(m.dat$DateP))
+
+#one missing date
+m.dat$Year[m.dat$Year %in% 2012]<-2013
+m.dat$Year[m.dat$Year %in% 2106]<-2016
+
+#Number of bird species
+h_species<-nlevels(m.dat$Hummingbird)
+
+#Number of plant species
+plant_species<-nlevels(m.dat$Iplant_Double)
+
+#Get english name
+dath<-merge(m.dat,hum.morph, by.x="Hummingbird",by.y="English",keep=all)
+
+#Merge to flowers
+int.FLlevels<-levels(factor(dath$Iplant_Double))
+
+#Which flowers are we missing info for?
+missingTraits<-int.FLlevels[!int.FLlevels %in% fl.morph$X]
+
+#print(paste("Missing Trait Information:",missingTraits))
+dath<-merge(dath,fl.morph, by.x="Iplant_Double",by.y="X")
+
+#Drop piercing events, since they don't represent correlation
+#dath<-dath[!dath$Pierce %in% c("y","Y"),]
+```
+
+##Match Species to Morphology
+
+```{r}
+#observed traitmatching
+traitmatchF<-abs(t(sapply(hum.morph$Bill,function(x){x-fl.morph$Corolla})))
+rownames(traitmatchF)<-hum.morph$English
+colnames(traitmatchF)<-fl.morph$Group.1
+```
+
+```{r}
+#match names #Round to 2 decimals #Convert to cm for winbugs, avoids numerical underflow
+traitmatchT<-round(traitmatchF[rownames(traitmatchF) %in% dath$Hummingbird,colnames(traitmatchF) %in% dath$Iplant_Double],2)
+traitmatchT<-traitmatchT[sort(rownames(traitmatchT)),sort(colnames(traitmatchT))]
+```
+
+##Elevation ranges
+
+Create a binary variable whether each observation was in a low elevation or high elevation transect. We have some species that just occur at the top of the gradient, and are not present in the sampling window of flowers at the low elevation.
+
+Accounting for non-availability.
+We have to figure out which plants were sampled in which periods, and if it was sampled, the non-detection are 0 if it wasn't the non-detection are NA. then remove all the Na's.
+
+```{r}
+elevH<-read.csv("data/HummingbirdElevation.csv",row.names=1)
+head(elevH)
+colnames(elevH)[5]<-"Elevation"
+elevH$Bird<-1:nrow(elevH)
+
+#high elevation or low elevation
+elevP<-read.csv("data/PlantElevation.csv",row.names=1)
+colnames(elevP)[5]<-"Elevation"
+elevP$Plant<-1:nrow(elevP)
+elevP$Iplant_Double<-as.character(elevP$Iplant_Double)
+
+#Merge to observed data
+#plants
+dathp<-merge(dath,elevP,by="Iplant_Double")
+
+#birds
+datph<-merge(dathp,elevH,by="Hummingbird")
+```
+
+What elevation transect is each observation in?
+The camera data need to be inferred from the GPS point.
+
+```{r}
+#cut working best on data.frame
+datph<-as.data.frame(datph)
+
+#which elevation bin is each observation within
+labs<-paste(seq(1300,2500,200),seq(1500,2700,200),sep="_")
+
+#for the couple points that have 1290 elevation, round up to 300 for convienance
+datph$ele[datph$ele < 1300]<-1301
+datph$ele<-as.numeric(datph$ele)
+datph$Transect_R[is.na(datph$Transect_R)]<-as.character(cut(datph[is.na(datph$Transect_R),]$ele,seq(1300,2700,200),labels=labs))
+
+#Elev for the transects is the midpoint
+tran_elev<-datph[datph$Survey_Type=='Transect',"Transect_R"]
+datph[datph$Survey_Type=='Transect',"ele"]<-sapply(tran_elev,function(x){
+  mean(as.numeric(str_split(x,"_")[[1]]))
+})
+```
+
+### Define Time Events
+
+```{r}
+#ID for NA is holger transects, make the id's 1:n for each day of transect at each elevation, assuming no elevation was split across days.
+datph$ID<-as.character(datph$ID)
+noid<-datph[is.na(datph$ID),]
+
+id_topaste<-paste(noid$Month,noid$Year,"Transect",sep="_")
+datph[which(is.na(datph$ID)),"ID"]<-id_topaste
+
+#Create year month combination
+datph$Time<-paste(datph$Month,datph$Year,sep="_")
+
+#Label survey type
+datph$Survey_Type<-NA
+
+mt<-!is.na(datph$TransectID)*1
+datph$Survey_Type[mt==1]<-"Transect"
+datph$Survey_Type[!datph$Survey_Type %in% "Transect"]<-"Camera"
+
+datph<-datph[datph$Survey_Type=="Camera",]
+
+#time filter
+
+#sort by timestamp
+datph<-datph[order(datph$timestamp),]
+
+dotime<-function(d){
+  d$Timediff<-NA
+  if(nrow(d)>1){
+  for (x in 2:nrow(d)){
+  d$Timediff[x]<-difftime(d$timestamp[x],d$timestamp[x-1],units="mins")  
+  }
+  }
+  return(d)
+}
+
+datph<-datph %>% group_by(ID,Hummingbird) %>% do(dotime(.))
+
+#eliminate interaction by the same species within five minutes
+datph<-datph[!1:nrow(datph) %in% which(datph$Timediff<5),]
+#Day level
+#add day ID
+sdat<-split(datph,list(datph$ID),drop = T)
+
+sdat<-lapply(sdat,function(x){
+  x<-droplevels(x)
+  x$Day<-as.numeric(as.factor(x$DateP))
+  return(x)
+})
+
+indatraw<-rbind_all(sdat)
+
+#Species names
+for (x in 1:nrow(indatraw)){
+  indatraw$Hummingbird[x]<-as.character(elevH[elevH$Bird %in% indatraw$Bird[x],"Hummingbird"])
+  indatraw$Iplant_Double[x]<-as.character(elevP[elevP$Plant %in% indatraw$Plant[x],"Iplant_Double"])
+}
+
+#match the traits
+traitmelt<-melt(traitmatchT)
+colnames(traitmelt)<-c("Hummingbird","Iplant_Double","Traitmatch")
+
+#dummy presence variable
+indatraw$Yobs<-1
+
+#prune columsn to make more readable
+indatraw<-indatraw[,c("Hummingbird","Iplant_Double","ID","Time","Month","Year","Transect_R","ele","DateP","Yobs","Day","Survey_Type","Pierce")]
+
+```
+
+##Summarize daily interactions
+To estimate the daily detectability, there can only be a max of one interaction per day.
+We use mean elevation to average across observations within a transect
+```{r}
+indatraw<-indatraw %>% group_by(Hummingbird,Iplant_Double,ID,Day) %>% summarize(Yobs=sum(Yobs),Time=unique(Time),Transect_R=unique(Transect_R),Month=unique(Month),Year=unique(Year),ele=mean(ele),DateP=unique(DateP),Survey_Type=unique(Survey_Type)) %>% ungroup()
+```
+
+##Absences - accounting for non-detection
+
+We have more information than just the presences, given species elevation ranges, we have absences as well. Absences are birds that occur at the elevation of the plant sample, but were not recorded feeding on the flower.
+
+```{r}
+#Only non-detections are real 0's, the rest are NA's and are removed.
+#Plants not surveyed in that time period
+#Hummingbirds not present at that elevation
+
+#For each ID
+Time<-unique(indatraw$Time)
+
+#absences data frame
+absences<-list()
+
+for(t in Time){
+  IDlist<-unlist(unique(indatraw[indatraw$Time ==t,"ID"]))
+
+  for (j in IDlist){
+  #Which plants were sampled
+  a<-indatraw %>% filter(Time==t,ID==j)
+  
+  #For each sampled transect
+  trans<-unique(a$Transect_R)
+  
+  if(!length(trans)==0){
+    for(transect in trans){
+
+    #for each date 
+    datec<-a %>% filter(Transect_R %in% transect)
+    datecam<-unique(datec$DateP)
+    }} else{
+      datecam<-a %>% distinct(DateP) %>% .$DateP
+    }
+    for(Date in datecam){
+      
+    #for each plant along that transect at that date
+    pres<-a %>% filter(DateP %in% Date) %>% distinct(Iplant_Double) %>% .$Iplant_Double
+    
+    #Which day in sampling
+    dday<-a %>% filter(Transect_R %in% transect,DateP %in% Date) %>% distinct(Day) %>% .$Day
+
+      for (plant in pres){
+        #Get mean elevation of that plant record
+        camelev<- a %>% filter(Transect_R %in% transect,DateP %in% Date,Iplant_Double %in% plant) %>% .$ele %>% mean()
+        
+        #Which birds are present at that observation
+        predh<-elevH[((elevH$Low < camelev) & (camelev < elevH$High)),"Hummingbird"]
+        
+        #remove the ones seen on that plant
+        hum_present<-a %>% filter(Transect_R %in% transect,DateP %in% Date,Iplant_Double %in% plant) %>% .$Hummingbird
+        abbh<-predh[!predh %in% hum_present]
+        if(length(abbh)==0){next}
+        
+        #Make absences from those )(cat not the best)
+        add_absences<-data.frame(Hummingbird=abbh,Iplant_Double=plant,Time=t,ID=j,DateP=Date,Month=min(a$Month),Year=unique(a$Year),Transect_R=transect,ele=camelev,Day=unique(dday),Survey_Type=unique(a$Survey_Type),Yobs=0)
+        absences<-append(absences,list(add_absences))
+      }
+    }
+  }
+}
+    
+indatab<-rbind_all(absences)
+
+#merge with original data
+indat<-rbind_all(list(indatraw,indatab))
+
+```
+
+```{r}
+#Get trait information
+#match the traits
+indat<-merge(indat,traitmelt,by=c("Hummingbird","Iplant_Double"))
+```
+
+Reformat index for jags.
+Jags needs a vector of input species 1:n with no breaks.
+
+
+
+
+#Hierarchical Model
+
+For hummingbird species i feeding on plant species j observed at time k and sampling event observed by transect (YTransect) or camera (YCamera)
+
+Observation Model:
+
+$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega) $$
+
+Process Model:
+
+$$ N_{i,j,k} \sim Binomial(\lambda_{i,j,k}) $$
+$$ logit(\lambda_{i,j,k}) = \alpha_i + \beta_{1,i} * Traitmatch_{i,j} $$
+
+**Priors**
+
+$$ \phi \sim Normal(0,0.386) $$
+$$\alpha_i \sim Normal(\alpha_\mu,\alpha_\tau)$$
+$$\beta_{1,i} \sim Normal(\mu_{\beta_1,\tau_{beta_1}})$$
+
+
+Group Level Logit Transformed Means
+$$ \mu_\alpha \sim Normal(0,1.67)$$
+$$\mu_{\beta_1} \sim Normal(0,1.67)$$
+
+Group Level Variance
+$$\tau_{\alpha} \sim Half cauchy(0,1,1)$$
+$$\tau_{\beta_1} \sim Half cauchy(0,1,1)$$
+
+```{r}
+
+#Cut Model into timeslives
+time_slices<-cut(indat,indat$Time,breaks=)
+
+chains<-list()
+traitfit<-list()
+for (x in 2:length(time_slices)){
+  
+  #Run Model
+  mod<-runModel(time_slices[[x]])
+  
+  #Get Chains
+  chains[[x]]<-getChains(mod)
+  
+  #Retrieve Trait-match paramaters
+  traitfit[[x]]<-getPar(mod)
+  
+  #Assess fit
+  modelFit()
+
+  #make networks
+  makeNetworks()
+
+}
+```
+
+
+```{r}
+#extract par to data.frame
+pars_detect<-extract_par(m2,data=indat,Bird="jBird",Plant="jPlant")
+```
+
+##Assess Convergence
+
+```{r,cache=FALSE,fig.width=13,fig.height=5}
+###Chains
+ggplot(pars_detect[pars_detect$par %in% c("alpha","beta1"),],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + facet_grid(par~species,scale="free") + theme_bw() + labs(col="Chain") + ggtitle("Species Level")
+```
+
+```{r,fig.height=12}
+ggplot(pars_detect[pars_detect$par %in% c("detect"),],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + facet_wrap(~species,scale="free",ncol=3) + theme_bw() + labs(col="Chain") + ggtitle("Species Level")
+```
+
+```{r,fig.height=5,fig.width=11}
+ggplot(pars_detect[pars_detect$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
+```
+
+#Posteriors
+
+```{r,cache=FALSE,fig.width=11,fig.height=14}
+###Posterior Distributions
+ggplot(pars_detect[pars_detect$par %in% c("alpha","beta1"),],aes(x=estimate)) + geom_histogram(position='identity') +  facet_grid(species~par,scales="free") + theme_bw() + ggtitle("Species Parameters")
+```
+
+```{r,cache=FALSE,fig.width=11,fig.height=8}
+#Detection figure
+pars_detect<-merge(pars_detect,jagsIndexBird,by.x="species",by.y="jBird",all=T)
+ggplot(pars_detect[pars_detect$par %in% "detect",],aes(x=par,y=estimate)) + geom_violin(fill='black') + theme_bw() + ggtitle("Detection Probability") + facet_wrap(~Hummingbird)
+```
+
+```{r,cache=FALSE,fig.height=5,fig.width=13}
+```
+
+#Detection Table
+```{r}
+detecttable<-group_by(pars_detect,Hummingbird,par) %>% filter(par %in% c('detect')) %>% summarize(mean=mean(estimate),lower=quantile(estimate,0.05),upper=quantile(estimate,0.95))
+detecttable
+```
+
+##Discrepancy 
+
+The goodness of fit is a measured as chi-squared. The expected value for each day is the detection rate * the estimate intensity of interactions. The expected value is compared to the observed value of the actual data. In addition, a replicate dataset is generated from the posterior predicted intensity. Better fitting models will have lower discrepancy values and be 
+Better fitting models are smaller values and closer to the 1:1 line. A perfect model would be 0 discrepancy. This is unrealsitic given the stochasticity in the sampling processes. Rather, its better to focus on relative discrepancy. In addition, a model with 0 discrepancy would likely be seriously overfit and have little to no predictive power.
+
+```{r,fig.height=4,fig.width=8,message=F,warning=F}
+fitstat<-pars_detect[pars_detect$par %in% c("fit","fitnew"),]
+fitstat<-dcast(fitstat,Draw+Chain~par,value.var="estimate")
+
+ymin<-round(min(fitstat$fit))
+ymax<-round(max(fitstat$fit))
+ab<-data.frame(x=0:ymax,y=0:ymax)
+disc_obs<-ggplot(fitstat,aes(x=fit,y=fitnew)) + geom_point() + theme_bw() + labs(x="Discrepancy of observed data",y="Discrepancy of replicated data",col="Model")  + ggtitle("Posterior predictive check") + geom_line(data=ab,aes(x=x,y=y)) + coord_fixed() + ylim(ymin=0,ymax=max(max(c(fitstat$fit,fitstat$fitnew)))) + xlim(xmin=0,xmax=max(max(c(fitstat$fit,fitstat$fitnew))))
+disc_obs
+
+#Bayesian p-value
+sum(fitstat$fitnew>fitstat$fit)/nrow(fitstat)
+ggsave("Figures/ObservedDiscrepancy.jpeg",width = 5,height=10)
+```
+
+#Predicted Relationship 
+
+```{r,fig.height=4,fig.width=4}
+#Expand out pars
+castdf<-dcast(pars_detect[pars_detect$par %in% c("beta1_mu","alpha_mu"),], Chain + Draw~par,value.var="estimate")
+```
+
+## Posterior prediction
+
+```{r,fig.width=7,fig.height=6}
+#Trajectories from posterior
+predy<-trajF(alpha=castdf$alpha_mu,beta1=castdf$beta1_mu,trait=indat$Traitmatch)
+
+ggplot(data=predy,aes(x=trait)) + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.4,fill="red")  +  theme_bw() + ylab("Interactions") + xlab("Difference between Bill and Corolla Length") + geom_point(data=indat,aes(x=Traitmatch,y=Camera)) + geom_line(aes(y=mean)) + geom_point(data=indat,aes(x=Traitmatch,y=Transect)) 
+```
+
+```{r}
+save.image("ObservedModel.RData")
+```
