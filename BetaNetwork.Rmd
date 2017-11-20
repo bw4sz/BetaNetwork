@@ -263,90 +263,13 @@ We use mean elevation to average across observations within a transect
 indatraw<-indatraw %>% group_by(Hummingbird,Iplant_Double,ID,Day) %>% summarize(Yobs=sum(Yobs),Time=unique(Time),Transect_R=unique(Transect_R),Month=unique(Month),Year=unique(Year),ele=mean(ele),DateP=unique(DateP),Survey_Type=unique(Survey_Type)) %>% ungroup()
 ```
 
-##Absences - accounting for non-detection
-
-We have more information than just the presences, given species elevation ranges, we have absences as well. Absences are birds that occur at the elevation of the plant sample, but were not recorded feeding on the flower.
-
 ```{r}
-#Only non-detections are real 0's, the rest are NA's and are removed.
-#Plants not surveyed in that time period
-#Hummingbirds not present at that elevation
-
-#For each ID
-Time<-unique(indatraw$Time)
-
-#absences data frame
-absences<-list()
-
-for(t in Time){
-  IDlist<-unlist(unique(indatraw[indatraw$Time ==t,"ID"]))
-
-  for (j in IDlist){
-  #Which plants were sampled
-  a<-indatraw %>% filter(Time==t,ID==j)
-  
-  #For each sampled transect
-  trans<-unique(a$Transect_R)
-  
-  if(!length(trans)==0){
-    for(transect in trans){
-
-    #for each date 
-    datec<-a %>% filter(Transect_R %in% transect)
-    datecam<-unique(datec$DateP)
-    }} else{
-      datecam<-a %>% distinct(DateP) %>% .$DateP
-    }
-    for(Date in datecam){
-      
-    #for each plant along that transect at that date
-    pres<-a %>% filter(DateP %in% Date) %>% distinct(Iplant_Double) %>% .$Iplant_Double
-    
-    #Which day in sampling
-    dday<-a %>% filter(Transect_R %in% transect,DateP %in% Date) %>% distinct(Day) %>% .$Day
-
-      for (plant in pres){
-        #Get mean elevation of that plant record
-        camelev<- a %>% filter(Transect_R %in% transect,DateP %in% Date,Iplant_Double %in% plant) %>% .$ele %>% mean()
-        
-        #Which birds are present at that observation
-        predh<-elevH[((elevH$Low < camelev) & (camelev < elevH$High)),"Hummingbird"]
-        
-        #remove the ones seen on that plant
-        hum_present<-a %>% filter(Transect_R %in% transect,DateP %in% Date,Iplant_Double %in% plant) %>% .$Hummingbird
-        abbh<-predh[!predh %in% hum_present]
-        if(length(abbh)==0){next}
-        
-        #Make absences from those )(cat not the best)
-        add_absences<-data.frame(Hummingbird=abbh,Iplant_Double=plant,Time=t,ID=j,DateP=Date,Month=min(a$Month),Year=unique(a$Year),Transect_R=transect,ele=camelev,Day=unique(dday),Survey_Type=unique(a$Survey_Type),Yobs=0)
-        absences<-append(absences,list(add_absences))
-      }
-    }
-  }
-}
-    
-indatab<-rbind_all(absences)
-
-#merge with original data
-indat<-rbind_all(list(indatraw,indatab))
-
+indat<-prepData(indatraw)
 ```
-
-```{r}
-#Get trait information
-#match the traits
-indat<-merge(indat,traitmelt,by=c("Hummingbird","Iplant_Double"))
-```
-
-Reformat index for jags.
-Jags needs a vector of input species 1:n with no breaks.
-
-
-
 
 #Hierarchical Model
 
-For hummingbird species i feeding on plant species j observed at time k and sampling event observed by transect (YTransect) or camera (YCamera)
+For hummingbird species i feeding on plant species j observed at time k and sampling event observed by transect 
 
 Observation Model:
 
@@ -359,61 +282,65 @@ $$ logit(\lambda_{i,j,k}) = \alpha_i + \beta_{1,i} * Traitmatch_{i,j} $$
 
 **Priors**
 
-$$ \phi \sim Normal(0,0.386) $$
-$$\alpha_i \sim Normal(\alpha_\mu,\alpha_\tau)$$
-$$\beta_{1,i} \sim Normal(\mu_{\beta_1,\tau_{beta_1}})$$
+$$\phi \sim Normal(0,0.386) $$
 
+$$ \alpha_i \sim Normal(\alpha_\mu,\alpha_\tau)$$
+$$ \beta_{1,i} \sim Normal(\mu_{\beta_1,\tau_{beta_1}})$$
 
 Group Level Logit Transformed Means
 $$ \mu_\alpha \sim Normal(0,1.67)$$
-$$\mu_{\beta_1} \sim Normal(0,1.67)$$
+
+$$ \mu_{\beta_1} \sim Normal(0,1.67)$$
 
 Group Level Variance
-$$\tau_{\alpha} \sim Half cauchy(0,1,1)$$
-$$\tau_{\beta_1} \sim Half cauchy(0,1,1)$$
+$$ \tau_{\alpha} \sim Half cauchy(0,1,1)$$
+
+$$ \tau_{\beta_1} \sim Half cauchy(0,1,1)$$
 
 ```{r}
-
+#Source model
+source("models/TraitMatch.R")
+  
+#print model
+writeLines(readLines("models/TraitMatch.R"))
+  
 #Cut Model into timeslives
-time_slices<-cut(indat,indat$Time,breaks=)
+indat$interval<-cut(as.POSIXct(indat$DateP),2)
+indat$jinterval<-as.numeric(indat$interval)
+intervals<-unique(indat$jinterval)
+
+indat<-indat %>% arrange(DateP)
 
 chains<-list()
 traitfit<-list()
-for (x in 2:length(time_slices)){
+nets<-list()
+predicted<-list()
+
+#predict up to the final interval
+
+for (x in 1:(length(intervals)-1)){
   
   #Run Model
-  mod<-runModel(time_slices[[x]])
+  mod<-runModel(indat=indat,interval=intervals[x],traitmatchT = traitmatchT)
   
   #Get Chains
-  chains[[x]]<-getChains(mod)
-  
-  #Retrieve Trait-match paramaters
-  traitfit[[x]]<-getPar(mod)
-  
-  #Assess fit
-  modelFit()
-
-  #make networks
-  makeNetworks()
-
+  chains[[x]]<-data.frame(getChains(mod),interval=names(time_slices)[x])
 }
-```
 
+alldat<-bind_rows(chains)
 
-```{r}
-#extract par to data.frame
-pars_detect<-extract_par(m2,data=indat,Bird="jBird",Plant="jPlant")
+head(alldat)
 ```
 
 ##Assess Convergence
 
 ```{r,cache=FALSE,fig.width=13,fig.height=5}
 ###Chains
-ggplot(pars_detect[pars_detect$par %in% c("alpha","beta1"),],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + facet_grid(par~species,scale="free") + theme_bw() + labs(col="Chain") + ggtitle("Species Level")
+ggplot(alldat[alldat$par %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + facet_grid(par~interval,scale="free") + theme_bw() + labs(col="Chain") + ggtitle("Species Level")
 ```
 
 ```{r,fig.height=12}
-ggplot(pars_detect[pars_detect$par %in% c("detect"),],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + facet_wrap(~species,scale="free",ncol=3) + theme_bw() + labs(col="Chain") + ggtitle("Species Level")
+ggplot(alldat[alldat$par %in% c("detect"),],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + facet_wrap(species~interval,scale="free",ncol=3) + theme_bw() + labs(col="Chain") + ggtitle("Species Level")
 ```
 
 ```{r,fig.height=5,fig.width=11}
@@ -434,12 +361,6 @@ ggplot(pars_detect[pars_detect$par %in% "detect",],aes(x=par,y=estimate)) + geom
 ```
 
 ```{r,cache=FALSE,fig.height=5,fig.width=13}
-```
-
-#Detection Table
-```{r}
-detecttable<-group_by(pars_detect,Hummingbird,par) %>% filter(par %in% c('detect')) %>% summarize(mean=mean(estimate),lower=quantile(estimate,0.05),upper=quantile(estimate,0.95))
-detecttable
 ```
 
 ##Discrepancy 

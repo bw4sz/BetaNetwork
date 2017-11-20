@@ -1,7 +1,8 @@
-sink("models/TraitMatch.jags")
+sink("models/test.jags")
+
 cat("
     model {
-    
+
     #Observation Model
     for (x in 1:Nobs){
     
@@ -15,21 +16,19 @@ cat("
     Yobs[x] ~ dbern(p[x])
     
     #Observed discrepancy
-    E[x]<-abs(Yobs[x]- s[x])
+    #E[x]<-abs(Yobs[x]-S[Bird[x],Plant[x]])
     }
     
     #Assess Model Fit - Predict remaining data
     for(x in 1:Nnewdata){
-    
-    #Generate prediction
-     znew[x] ~ dbern(detect[NewBird[x]])
-     pnew[x]<-znew[x]*alpha[NewBird[x]] + beta1[NewBird[x]] * Traitmatch[NewBird[x],NewPlant[x]] 
-    
-     Ynew_pred[x]~dbern(pnew[x])
-    
-    #Assess fit
-     #E.new[x]<-abs(Ynew[x]-Ynew_pred[x])
-
+      
+      #Generate prediction
+      znew[x] ~ dbern(detect[NewBird[x]])
+      pnew[x]<-znew[x]*alpha[NewBird[x]] + beta1[NewBird[x]] * Traitmatch[NewBird[x],NewPlant[x]] 
+      Ynew_pred[x]~dbern(pnew[x])
+      
+      #Assess fit
+      E.new[x]<-abs(Ynew[x]-Ynew_pred[x])
     }
     
     #Priors
@@ -37,8 +36,8 @@ cat("
     #Detect priors, logit transformed - Following lunn 2012 p85
     
     for(x in 1:Birds){
-    logit(detect[x])<-dcam[x]
-    dcam[x]~dnorm(omega_mu,omega_tau)
+      logit(detect[x])<-dcam[x]
+      dcam[x]~dnorm(omega_mu,omega_tau)
     }
     
     #Process Model
@@ -71,7 +70,7 @@ cat("
     beta1_sigma<-pow(1/beta1_tau,0.5)
     
     #derived posterior check
-    fit<-sum(E[]) #Discrepancy for the observed data
+    #fit<-sum(E[]) #Discrepancy for the observed data
     #fitnew<-sum(E.new[])
     
     }

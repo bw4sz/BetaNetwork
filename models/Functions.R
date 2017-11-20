@@ -1,6 +1,77 @@
 #extract and create a dataframe of posteriors
 
-runModel<-function(indat,traitmatchT=traitmatchT){
+prepData<-function(indatraw){
+  #Only non-detections are real 0's, the rest are NA's and are removed.
+  #Plants not surveyed in that time period
+  #Hummingbirds not present at that elevation
+  
+  #For each ID
+  Time<-unique(indatraw$Time)
+  
+  #absences data frame
+  absences<-list()
+  
+  for(t in Time){
+    IDlist<-unlist(unique(indatraw[indatraw$Time ==t,"ID"]))
+    
+    for (j in IDlist){
+      #Which plants were sampled
+      a<-indatraw %>% filter(Time==t,ID==j)
+      
+      #For each sampled transect
+      trans<-unique(a$Transect_R)
+      
+      if(!length(trans)==0){
+        for(transect in trans){
+          
+          #for each date 
+          datec<-a %>% filter(Transect_R %in% transect)
+          datecam<-unique(datec$DateP)
+        }} else{
+          datecam<-a %>% distinct(DateP) %>% .$DateP
+        }
+      for(Date in datecam){
+        
+        #for each plant along that transect at that date
+        pres<-a %>% filter(DateP %in% Date) %>% distinct(Iplant_Double) %>% .$Iplant_Double
+        
+        #Which day in sampling
+        dday<-a %>% filter(Transect_R %in% transect,DateP %in% Date) %>% distinct(Day) %>% .$Day
+        
+        for (plant in pres){
+          #Get mean elevation of that plant record
+          camelev<- a %>% filter(Transect_R %in% transect,DateP %in% Date,Iplant_Double %in% plant) %>% .$ele %>% mean()
+          
+          #Which birds are present at that observation
+          predh<-elevH[((elevH$Low < camelev) & (camelev < elevH$High)),"Hummingbird"]
+          
+          #remove the ones seen on that plant
+          hum_present<-a %>% filter(Transect_R %in% transect,DateP %in% Date,Iplant_Double %in% plant) %>% .$Hummingbird
+          abbh<-predh[!predh %in% hum_present]
+          if(length(abbh)==0){next}
+          
+          #Make absences from those )(cat not the best)
+          add_absences<-data.frame(Hummingbird=abbh,Iplant_Double=plant,Time=t,ID=j,DateP=Date,Month=min(a$Month),Year=unique(a$Year),Transect_R=transect,ele=camelev,Day=unique(dday),Survey_Type=unique(a$Survey_Type),Yobs=0)
+          absences<-append(absences,list(add_absences))
+        }
+      }
+    }
+  }
+  
+  indatab<-rbind_all(absences)
+  
+  #merge with original data
+  indat<-rbind_all(list(indatraw,indatab))
+  
+  #match to traits
+  indat<-merge(indat,traitmelt,by=c("Hummingbird","Iplant_Double"))
+  return(indat)
+}
+
+#run a jags model
+
+runModel<-function(indat,interval,traitmatchT){
+  
   #Easiest to work with jags as numeric ordinal values
   indat$Hummingbird<-as.factor(indat$Hummingbird)
   indat$Iplant_Double<-as.factor(indat$Iplant_Double)
@@ -21,40 +92,48 @@ runModel<-function(indat,traitmatchT=traitmatchT){
   indat$jTime<-as.numeric(as.factor(indat$Time))
   indat$jID<-as.numeric(as.factor(indat$ID))
   
-  #Source model
-  source("models/TraitMatch.R")
-  
-  #print model
-  writeLines(readLines("models/TraitMatch.R"))
-  
   #Inits
   InitStage <- function(){
     #A blank Y matrix - all present
-    initY<-array(dim=c(Birds,Plants,Times),22)
-    initB<-rep(0.5,Birds)
-    list(S=initY,dcam=initB)}
+    initY<-array(dim=c(Dat$Birds,Dat$Plants),1)
+    initB<-rep(0.5,Dat$Birds)
+    initp<-rep(1,Dat$Nobs)
+    initpnew<-rep(1,Dat$Nnewdata)
+    alpha=rep(0,Dat$Birds)
+    beta1=rep(0,Dat$Birds)
+    Ynew_pred<-rep(1,Dat$Nnewdata)
+    list(dcam=initB,znew=initpnew,z=initp,Ynew_pred=Ynew_pred)}
   
   #Parameters to track
   ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","E","E.new","fit","fitnew")
   
   #Jags Data
+  Yobs_dat<-indat[indat$jinterval <= interval,]
+  Ynew_dat<-indat[indat$jinterval > interval,]
+  Yobs<-(Yobs_dat$Yobs > 0) *1
+  Ynew<-(Ynew_dat$Yobs > 0) *1
+  
   Dat<-list(
-    Yobs_camera = (indat$Yobs > 0) *1 ,
+    Yobs=Yobs,
     Birds=max(indat$jBird),
-    Bird=indat$jBird,
-    Plant=indat$jPlant,
-    Time=indat$jID,
-    Plants=max(indat$jPlant),
-    Times=max(indat$jID),
-    Nobs=nrow(indat),
+    Bird=Yobs_dat$jBird,
+    Plant=Yobs_dat$jPlant,
+    Nobs=length(Yobs),
+    NewBird=Ynew_dat$jBird,
+    NewPlant=Ynew_dat$jPlant,
+    Ynew=Ynew,
+    Nnewdata=length(Ynew),
     Traitmatch=jTraitmatch)
   
   #MCMC options
-  if(newModel){
     system.time(
-      m2<-upda(data=Dat,parameters.to.save =ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=1,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=1,DIC=F)
     )
-  }
+    return(m2)
+}
+
+getChains<-function(mod){
+  pars_detect<-getPar(mod,data=indat,Bird="jBird",Plant="jPlant")
 }
 
 getPar<-function(x,data=indat,Bird="Bird",Plant="Plant"){
@@ -105,39 +184,10 @@ modelFit<-function(mod){
   
   #Compare Network to remaining data
   #For each link
-  lapply(generated_networks,,function(x){
+  lapply(generated_networks,function(x){
     genNetwork
   })
   
-}
-
-
-trajState<-function(alpha,beta,x,observed){
-  
-  #Bind together
-  fdat<-data.frame(alpha=alpha,beta=beta)
-  
-  #fit regression for each input estimate
-  sampletraj<-list()
-  for (s in 1:nrow(fdat)){
-    a<-fdat$alpha[s]
-    b<-fdat$beta[s]
-    yp=exp(a + b*x$value)
-    
-    #compute pred value
-    state<-data.frame(x,State=rpois(length(yp),yp))
-    
-    #merge with observed state
-    mstate<-merge(state,observed,by=c("Bird","Plant"))
-    
-    #Compute chisquared
-    csq<-sum((mstate$Y-mstate$State)^2/(mstate$State+0.5))
-    
-    sampletraj[[s]]<-csq
-  }
-  
-  #return as a vector
-  return(unlist(sampletraj))
 }
 
 #sample trajectory for a given posterior
@@ -155,59 +205,14 @@ trajF<-function(alpha,beta1,trait){
 traj<-function(alpha,beta1,trait){
   
   #fit regression for each input estimate
-  v=exp(alpha + beta1 * trait)
+  v=inv.logit(alpha + beta1 * trait)
   
-  sampletraj<-data.frame(trait=trait,resources=resources,y=as.numeric(v))
+  sampletraj<-data.frame(trait=trait,y=as.numeric(v))
   
   #Compute CI intervals
   return(sampletraj)
 }
 
-#sample trajectory for a given posterior using quantile or hdi interval
-trajLog<-function(alpha,beta1,x,type='quantile'){
-  indat<-data.frame(alpha,beta1)
-  
-  #fit regression for each input estimate
-  sampletraj<-list()
-  
-  for (y in 1:nrow(indat)){
-    v=exp(indat$alpha[y] + indat$beta1[y] * x)
-    
-    sampletraj[[y]]<-data.frame(x=as.numeric(x),y=as.numeric(v))
-  }
-  
-  sample_all<-rbind_all(sampletraj)
-  
-  #Compute CI intervals
-  if(type=='quantile'){
-    predy<-group_by(sample_all,x) %>% summarise(lower=quantile(y,0.025,na.rm=T),upper=quantile(y,0.975,na.rm=T),mean=mean(y,na.rm=T))
-  }
-  if(type=='hdi'){
-    predy<-group_by(sample_all,x) %>% summarise(lower=hdi(y)[[1]],upper=hdi(y)[[2]],mean=mean(y,na.rm=T))
-  }
-  return(predy)
-}
-
-#predicted y for logistic
-trajLogistic<-function(alpha,beta1,beta2,beta3,x,resources){
-  indat<-data.frame(alpha,beta1,beta2,beta3)
-  
-  #fit regression for each input estimate
-  sampletraj<-list()
-  
-  for (y in 1:nrow(indat)){
-    v=exp(indat$alpha[y] + indat$beta1[y] * x + indat$beta2[y] * resources + indat$beta3[y] * x*resources)
-    
-    sampletraj[[y]]<-data.frame(x=as.numeric(x),y=as.numeric(v))
-  }
-  
-  sample_all<-rbind_all(sampletraj)
-  
-  #Compute CI intervals
-  predy<-group_by(sample_all,x) %>% summarise(lower=quantile(y,0.025,na.rm=T),upper=quantile(y,0.975,na.rm=T),mean=mean(y,na.rm=T))
-}
-
-#calculate poisson interactions
 
 #plots
 #converge of chains
@@ -234,11 +239,6 @@ genNetwork<-function(x){
   #input matrix
   aggm<-matrix(nrow=nrow(jagsIndexBird),ncol=nrow(jagsIndexPlants),data=0)
   for (j in 1:nrow(x)){
-    aggm[x[j,"jBird"],x[j,"jPlant"]]<-rpois(1,lambda=x[j,"phi"])
+    aggm[x[j,"jBird"],x[j,"jPlant"]]<-rbinom(1,lambda=x[j,"phi"])
   }
 }
-
-
-
-ggplot(nstat,aes(x=value,fill=L1)) + geom_density(alpha=0.7) + facet_wrap(~Metric,scales='free',nrow=3) + scale_fill_discrete("Resource Availability") + theme_bw() + scale_fill_manual("Resource Availability",values=c("Grey80","Grey50","Black"))
-ggsave("Figures/NetworkStatistics.jpeg",height=4,width=6,dpi=600) 
