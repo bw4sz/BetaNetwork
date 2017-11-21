@@ -21,13 +21,13 @@
     for(x in 1:Nnewdata){
     
     #Generate prediction
-     znew[x] ~ dbern(detect[NewBird[x]])
-     pnew[x]<-znew[x]*alpha[NewBird[x]] + beta1[NewBird[x]] * Traitmatch[NewBird[x],NewPlant[x]] 
+      znew[x] ~ dbern(detect[NewBird[x]])
+      logit(snew[x])<-alpha[NewBird[x]] + beta1[NewBird[x]] * Traitmatch[NewBird[x],NewPlant[x]] 
+      pnew[x]<-znew[x]*snew[x]
+      Ynew_pred[x]~dbern(pnew[x])
     
-     Ynew_pred[x]~dbern(pnew[x])
-    
-    #Assess fit
-     #E.new[x]<-abs(Ynew[x]-Ynew_pred[x])
+    #Assess fit, proportion of corrected predicted links
+      E.new[x]<-abs(Ynew[x]-Ynew_pred[x])/Nnewdata
 
     }
     
@@ -71,7 +71,7 @@
     
     #derived posterior check
     fit<-sum(E[]) #Discrepancy for the observed data
-    #fitnew<-sum(E.new[])
+    fitnew<-sum(E.new[])
     
     }
     

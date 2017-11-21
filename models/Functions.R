@@ -70,48 +70,23 @@ prepData<-function(indatraw){
 
 #run a jags model
 
-runModel<-function(indat,interval,traitmatchT){
-  
-  #Easiest to work with jags as numeric ordinal values
-  indat$Hummingbird<-as.factor(indat$Hummingbird)
-  indat$Iplant_Double<-as.factor(indat$Iplant_Double)
-  indat$jBird<-as.numeric(indat$Hummingbird)
-  indat$jPlant<-as.numeric(indat$Iplant_Double)
-  
-  jagsIndexBird<-data.frame(Hummingbird=levels(indat$Hummingbird),jBird=1:length(levels(indat$Hummingbird)))
-  
-  jagsIndexPlants<-data.frame(Iplant_Double=levels(indat$Iplant_Double),jPlant=1:length(levels(indat$Iplant_Double)))
-  
-  #Similiarly, the trait matrix needs to reflect this indexing.
-  jTraitmatch<-traitmatchT[rownames(traitmatchT) %in% unique(indat$Hummingbird),colnames(traitmatchT) %in% unique(indat$Iplant_Double)]
-  
-  indat$Index<-1:nrow(indat)
-  indat<-droplevels(indat)
-  
-  #Turn Time and ID into numeric indexes
-  indat$jTime<-as.numeric(as.factor(indat$Time))
-  indat$jID<-as.numeric(as.factor(indat$ID))
+runModel<-function(Yobs_dat,Ynew_dat,interval,jTraitmatch){
   
   #Inits
   InitStage <- function(){
     #A blank Y matrix - all present
-    initY<-array(dim=c(Dat$Birds,Dat$Plants),1)
+    initY<-array(dim=c(Dat$Birds,Dat$Plants),max(Dat$Yobs)+1)
     initB<-rep(0.5,Dat$Birds)
-    initp<-rep(1,Dat$Nobs)
-    initpnew<-rep(1,Dat$Nnewdata)
-    alpha=rep(0,Dat$Birds)
-    beta1=rep(0,Dat$Birds)
-    Ynew_pred<-rep(1,Dat$Nnewdata)
-    list(dcam=initB,znew=initpnew,z=initp,Ynew_pred=Ynew_pred)}
+    Ynew_pred<-rep(max(Dat$Ynew),Dat$Nnewdata)
+    N<-rep(max(Dat$Yobs)+1,Dat$Nobs)
+    list(dcam=initB,N=N,Nnew=Ynew_pred,Ynew_pred=Ynew_pred)}
   
   #Parameters to track
-  ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","E","E.new","fit","fitnew")
+  ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","Ynew_pred","fit","fitnew")
   
   #Jags Data
-  Yobs_dat<-indat[indat$jinterval <= interval,]
-  Ynew_dat<-indat[indat$jinterval > interval,]
-  Yobs<-(Yobs_dat$Yobs > 0) *1
-  Ynew<-(Ynew_dat$Yobs > 0) *1
+  Yobs<-Yobs_dat$Yobs
+  Ynew<-Ynew_dat$Yobs
   
   Dat<-list(
     Yobs=Yobs,
@@ -127,46 +102,44 @@ runModel<-function(indat,interval,traitmatchT){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=1,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatchPoisson.jags",n.thin=1,n.iter=40000,n.burnin=39000,n.chains=1,DIC=F)
     )
     return(m2)
 }
 
 getChains<-function(mod){
-  pars_detect<-getPar(mod,data=indat,Bird="jBird",Plant="jPlant")
+  pars_detect<-getPar(mod,Bird="jBird",Plant="jPlant")
 }
 
-getPar<-function(x,data=indat,Bird="Bird",Plant="Plant"){
+getPredictions<-function(mod,Ynew_dat){
+  pars_detect<-getPar(mod,Bird="jBird",Plant="jPlant")
+  Ynew_pred<-pars_detect %>% filter(parameter=="Ynew_pred")
+  Ynew_dat$Index<-1:nrow(Ynew_dat)
+  Ynew_pred<-merge(Ynew_pred,Ynew_dat,by="Index")
+  return(Ynew_pred)
+}
+
+getPar<-function(x,Bird="Bird",Plant="Plant"){
   #extract desired info from the models
-  parsO<-melt(x$BUGSoutput$sims.array)
-  colnames(parsO)<-c("Draw","Chain","parameter","estimate")
+  #bind chains
+  pc_dive<-reshape2::melt(x$BUGSoutput$sims.array)
+  colnames(pc_dive)<-c("Draw","chain","par","value")
   
-  #label species and plants
-  l<-levels(parsO$parameter)
+  #extract parameter name
+  pc_dive$parameter<-data.frame(str_match(pc_dive$par,"(\\w+)"))[,-1]
   
-  #parameters to save
-  totrack<-x$parameters.to.save
+  #Extract index
+  splitpc<-split(pc_dive,pc_dive$parameter)
   
-  #assign species index to ragged frame.
-  sp_pl<-data.frame(parameter=l,species=as.numeric(str_match(l,pattern="\\[(\\d+)]")[,2]),par=str_extract(l,"\\w+"))
+  #single index
+  splitpc[c("alpha","beta1","detect","Ynew_pred")]<-lapply(splitpc[c("alpha","beta1","detect","Ynew_pred")],function(x){
+    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
+    pc<-data.frame(x,Index=sv)
+    return(pc)
+  }) 
   
-  #correct N samples
-  i<-sp_pl$par %in% "E"
-  
-  #Species
-  sp_pl[i,][,"species"]<-data[as.numeric(str_match(sp_pl[i,][,"parameter"],pattern="\\[(\\d+)]")[,2]),Bird]
-  
-  #Plant
-  #add a NA plant columns
-  sp_pl$plant<-NA
-  sp_pl[i,][,"plant"]<-data[as.numeric(str_match(sp_pl[i,][,"parameter"],pattern="\\[(\\d+)]")[,2]),Plant]
-  
-  #merge levels
-  pars<-merge(parsO,sp_pl)
-  
-  #take out deviance
-  pars<-pars[!pars$par %in% "deviance",]
-  return(pars)
+  #bind all matrices back together
+  pc_dive<-bind_rows(splitpc)
 }
 
 genNetwork<-function(x){
@@ -205,7 +178,7 @@ trajF<-function(alpha,beta1,trait){
 traj<-function(alpha,beta1,trait){
   
   #fit regression for each input estimate
-  v=inv.logit(alpha + beta1 * trait)
+  v=exp(alpha + beta1 * trait)
   
   sampletraj<-data.frame(trait=trait,y=as.numeric(v))
   

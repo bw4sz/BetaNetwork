@@ -1,35 +1,28 @@
-sink("models/TraitMatch.jags")
+sink("models/TraitMatchPoisson.jags")
 cat("
     model {
     
-    #Observation Model
     for (x in 1:Nobs){
     
-    #Observation Process
-    #True state
-    z[x] ~ dbern(detect[Bird[x]]) 
-    
-    #observation
-    logit(s[x])<-alpha[Bird[x]] + beta1[Bird[x]] * Traitmatch[Bird[x],Plant[x]] 
-    p[x]<-z[x] * s[x]
-    Yobs[x] ~ dbern(p[x])
+    log(lambda[x]) <- alpha[Bird[x]] + beta1[Bird[x]] * Traitmatch[Bird[x],Plant[x]] 
+    N[x]~dpois(lambda[x])
+    Yobs[x] ~ dbin(detect[Bird[x]],N[x])
     
     #Observed discrepancy
-    E[x]<-abs(Yobs[x]- s[x])
+    E[x]<-abs(Yobs[x]- N[x])/Nobs
     }
     
     #Assess Model Fit - Predict remaining data
     for(x in 1:Nnewdata){
     
     #Generate prediction
-      znew[x] ~ dbern(detect[NewBird[x]])
-      logit(snew[x])<-alpha[NewBird[x]] + beta1[NewBird[x]] * Traitmatch[NewBird[x],NewPlant[x]] 
-      pnew[x]<-znew[x]*snew[x]
-      Ynew_pred[x]~dbern(pnew[x])
+    log(lambdanew[x])<-alpha[NewBird[x]] + beta1[NewBird[x]] * Traitmatch[NewBird[x],NewPlant[x]] 
+    Nnew[x]~dpois(lambdanew[x])
+    Ynew_pred[x]~dbin(detect[NewBird[x]],Nnew[x])
     
     #Assess fit, proportion of corrected predicted links
-      E.new[x]<-abs(Ynew[x]-Ynew_pred[x])/Nnewdata
-
+    E.new[x]<-abs(Ynew[x]-Ynew_pred[x])/Nnewdata
+    
     }
     
     #Priors
@@ -56,7 +49,7 @@ cat("
     
     #OBSERVATION PRIOR
     omega_mu ~ dnorm(0,0.386)
-    omega_tau ~ dunif(0,10)
+    omega_tau ~ dunif(0,100)
     
     #Group process priors
     
@@ -76,5 +69,4 @@ cat("
     
     }
     ",fill=TRUE)
-
 sink()
