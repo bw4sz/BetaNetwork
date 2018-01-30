@@ -70,52 +70,12 @@ prepData<-function(indatraw){
 
 #run a jags model
 
-runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
-  
-  #Inits
-  InitStage <- function(){
-    #A blank Y matrix - all present
-    initY<-rep(1,Dat$Nobs)
-    initB<-rep(0.5,Dat$Birds)
-    Ynew_pred<-rep(1,Dat$Nnewdata)
-    z<-rep(1,Dat$Nobs)
-    znew<-rep(1,Dat$Nnewdata)
-    
-    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred)}
-  
-  #Parameters to track
-  ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","Ynew_pred","fit","fitnew")
-  
-  #Jags Data
-  Yobs<-(Yobs_dat$Yobs > 0)*1
-  Ynew<-(Ynew_dat$Yobs> 0)*1
-  
-  Dat<-list(
-    Yobs=Yobs,
-    Birds=max(indat$jBird),
-    Bird=Yobs_dat$jBird,
-    Plant=Yobs_dat$jPlant,
-    Nobs=length(Yobs),
-    NewBird=Ynew_dat$jBird,
-    NewPlant=Ynew_dat$jPlant,
-    Ynew=Ynew,
-    Nnewdata=length(Ynew),
-    Traitmatch=jTraitmatch)
-  
-  #MCMC options
-    system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=200,n.burnin=100,n.chains=2,DIC=F)
-    )
-    return(m2)
-}
-
 getChains<-function(mod){
   pars_detect<-getPar(mod,Bird="jBird",Plant="jPlant")
 }
 
-getPredictions<-function(mod,Ynew_dat){
-  pars_detect<-getPar(mod,Bird="jBird",Plant="jPlant")
-  Ynew_pred<-pars_detect %>% filter(parameter=="Ynew_pred")
+getPredictions<-function(pars,Ynew_dat){
+  Ynew_pred<-pars %>% filter(parameter=="Ynew_pred")
   Ynew_dat<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat))
   Ynew_pred<-merge(Ynew_pred,Ynew_dat,by="Index")
   return(Ynew_pred)
@@ -142,9 +102,4 @@ getPar<-function(x,Bird="Bird",Plant="Plant"){
   
   #bind all matrices back together
   pc_dive<-bind_rows(splitpc)
-}
-
-genLink<-function(alpha,beta1,x){
-  p<-inv.logit(alpha+beta1*x)
-  state<-rbinom(1,1,p)
 }

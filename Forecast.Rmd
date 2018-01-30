@@ -276,6 +276,13 @@ indat<-prepData(indatraw)
 
 #Modeling Fitting
 
+```{r}
+models<-list()
+chains<-list()
+networks<-list()
+```
+
+
 ## Species Identity
 
 ```{r}
@@ -322,6 +329,8 @@ Ynew_dat<-species_dat[species_dat$jinterval > intervals[1],]
 
 $$ Yobs_{i,j} \sim Bernoulli(\lambda_{i,j}) $$
 
+## Predicted
+
 ```{r}
 #Source model
 source("models/SpeciesIdentity.R")
@@ -358,59 +367,78 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=200,n.burnin=100,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=1000,n.burnin=900,n.chains=2,DIC=F)
     )
     return(m2)
 }
 
-mod<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat)
+models$Species$Predicted<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat)
+```
 
+```{r}
 #Get Chains
-chains<-data.frame(getChains(mod),jinterval=intervals[x])
-predicted<-data.frame(getPredictions(mod,Ynew_dat=Ynew_dat),jinterval=intervals[[1]])
+getChains<-function(mod){
+  
+  pc<-reshape2::melt(mod$BUGSoutput$sims.array)
+  colnames(pc)<-c("Draw","chain","par","value")
+  
+  #extract parameter name
+  pc$parameter<-data.frame(str_match(pc$par,"(\\w+)"))[,-1]
+  
+  #Extract index
+  splitpc<-split(pc,pc$parameter)
+  
+  #single index
+  splitpc[c("alpha")]<-lapply(
+    splitpc[c("alpha")],function(x){
+    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+),(\\d+)]"))[,3:4]
+    colnames(sv)<-c("jBird","jPlant")
+    pc<-data.frame(x,sv)
+    })
+  
+  splitpc[c("Ynew_pred")]<-lapply(
+    splitpc[c("Ynew_pred")],function(x){
+    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
+    pc<-data.frame(x,Index=sv)
+    })
+    
+  chains<-bind_rows(splitpc)
+return(chains)}
+```
+
+```{r}
+chains$Species$Predicted<-getChains(models$Species$Predicted)
 ```
 
 ###Assess Convergence
 
-```{r,cache=FALSE,fig.width=13,fig.height=5}
+```{r,cache=FALSE,fig.width=13,fig.height=20}
 ###Chains
-ggplot(chains[chains$parameter %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + facet_wrap(~parameter,scale="free") + theme_bw() + labs(col="Chain") 
+#ggplot(chains$Species$Predicted[chains$Species$Predicted$parameter %in% c("alpha"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + facet_wrap(jPlant~jBird,scale="free") + theme_bw() + labs(col="Chain") 
 ```
 
-```{r,fig.height=12}
-ggplot(chains[chains$parameter %in% c("detect"),],aes(x=value),alpha=0.2)  + geom_density() + facet_wrap(~Index,scale="free",ncol=3) + theme_bw()  + ggtitle("Species Level")
-
-ggplot(chains[chains$parameter %in% c("fitnew"),],aes(x=value))  + geom_density()  + theme_bw() 
-```
-
-```{r,fig.height=5,fig.width=11}
-ggplot(chains[chains$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
-```
-
-### Model fit
-
-```{r}
-sumfit<-chains[chains$par %in% c("fitnew"),]
-ggplot(sumfit,aes(x=1-value)) + geom_density(fill="black") + theme_bw() + labs(x="Proportion of correctly predicted observations") + scale_x_continuous(labels=scales::percent)
-#ggsave("Figures/pred_density.svg")
-#ggsave("Figures/pred_density.jpeg",height=3,width=7)
+```{r,fig.height=5}
+ggplot(chains$Species$Predicted[chains$Species$Predicted$parameter %in% c("fitnew"),],aes(x=value))  + geom_density(fill="black")  + theme_bw() 
 ```
 
 ##Generate network
 
 ```{r}
-posterior<-chains %>% filter(parameter %in% c("alpha","beta1")) %>% select(-par,jBird=Index) %>% spread(parameter,value) %>% merge(jagsIndexBird) 
+posterior<-chains$Species$Predicted %>% filter(parameter %in% c("alpha")) %>% select(-par) %>% mutate(jBird=as.numeric(jBird),jPlant=as.numeric(jPlant)) %>% spread(parameter,value) %>% inner_join(jagsIndexBird) %>% inner_join(jagsIndexPlants)
 
-genNetwork<-function(){
+genLink<-function(alpha){
+  p<-inv.logit(alpha)
+  state<-rbinom(1,1,p)
+}
+genNetwork<-function(posterior){
 m<-matrix(nrow=length(unique(Ynew_dat$Hummingbird)),ncol=length(unique(Ynew_dat$Iplant_Double)))
 colnames(m)<-unique(Ynew_dat$Iplant_Double)
 rownames(m)<-unique(Ynew_dat$Hummingbird)
 
 for(bird in unique(Ynew_dat$Hummingbird)){
 for(plant in unique(Ynew_dat$Iplant_Double)){
-  traitdiff<-traitmatchT[bird,plant]
-  samp<-posterior %>% filter(Hummingbird %in% bird) %>% sample_n(1)
-  m[bird,plant]<-genLink(alpha=samp$alpha,beta=samp$beta,traitdiff)
+  samp<-posterior %>% filter(Hummingbird %in% bird,Iplant_Double %in% plant) %>% sample_n(1)
+  m[bird,plant]<-genLink(alpha=samp$alpha)
 }
 }
 
@@ -418,73 +446,25 @@ nstat<-networklevel(m,index=c("connectance","niche overlap"),level="lower")
 return(nstat)
 }
 
-netstat<-melt(t(sapply(1:10,function(k) genNetwork()))) 
-colnames(netstat)<-c("Iteration","Metric","value")
-
-ggplot(netstat,aes(x=value)) + facet_wrap(~Metric,scales="free")  + geom_density(fill="black") + theme_bw()
+networks$Species$Predicted<-melt(t(sapply(1:20,function(k) genNetwork(posterior = posterior)))) 
 ```
 
-```{r}
-byintervalspecies<-predicted %>% group_by(Hummingbird) %>% summarize(mean=mean(Yobs-value),upper=quantile(Yobs-value,0.95),lower=quantile(Yobs-value,0.05))
-ggplot(byintervalspecies,aes(x=Hummingbird,y=mean)) + geom_point() + geom_line(aes(group=1)) + theme_bw() + facet_wrap(~Hummingbird,scales="free") + geom_hline(yintercept=0,linetype="dashed")
-```
-
-###Compare to model estimate when running the data
+## Estimated
 
 ```{r}
 #Run Model
-mod2<-runModel(Yobs_dat=Ynew_dat,Ynew_dat=Ynew_dat,jTraitmatch=jTraitmatch)
+models$Species$Estimated<-runModel(Yobs_dat=Ynew_dat,Ynew_dat=Ynew_dat)
 
 #Get Chains
-chains2<-data.frame(getChains(mod2),jinterval=intervals[x])
-predicted2<-data.frame(getPredictions(mod2,Ynew_dat=Ynew_dat),jinterval=intervals[[1]])
+chains$Species$Estimated<-data.frame(getChains(models$Species$Estimated))
 ```
 
-###How did the fit change?
+### Network
 
 ```{r}
-chains$Model<-"Predict"
-chains2$Model<-"Estimate"
-alldat<-bind_rows(chains,chains2)
-ggplot(alldat[alldat$parameter %in% c("beta1_mu"),],aes(x=value,fill=Model)) + geom_density(alpha=0.2) + facet_wrap(~parameter,scale="free") + theme_bw() 
-```
+posterior<-chains$Species$Estimated %>% filter(parameter %in% c("alpha")) %>% select(-par) %>% mutate(jBird=as.numeric(jBird),jPlant=as.numeric(jPlant)) %>% spread(parameter,value) %>% inner_join(jagsIndexBird) %>% inner_join(jagsIndexPlants)
 
-```{r}
-sumfit<-chains[chains$par %in% c("fitnew"),]
-sumfit2<-chains2[chains2$par %in% c("fitnew"),]
-ggplot(sumfit2,aes(x=1-value)) + geom_density(fill="black",alpha=0.2) + geom_density(data=sumfit,fill="red",alpha=0.2) + theme_bw() + labs(x="Proportion of correctly predicted observations") + scale_x_continuous(labels=scales::percent)
-#ggsave("Figures/PredLinksBoth.svg")
-#ggsave("Figures/PredLinksBoth.jpeg",height=3,width=7)
-```
-
-## Network
-
-```{r}
-posterior<-chains2 %>% filter(parameter %in% c("alpha","beta1")) %>% select(-par,jBird=Index) %>% spread(parameter,value) %>% merge(jagsIndexBird) 
-
-genNetwork<-function(){
-m<-matrix(nrow=length(unique(Ynew_dat$Hummingbird)),ncol=length(unique(Ynew_dat$Iplant_Double)))
-colnames(m)<-unique(Ynew_dat$Iplant_Double)
-rownames(m)<-unique(Ynew_dat$Hummingbird)
-
-for(bird in unique(Ynew_dat$Hummingbird)){
-for(plant in unique(Ynew_dat$Iplant_Double)){
-  traitdiff<-traitmatchT[bird,plant]
-  samp<-posterior %>% filter(Hummingbird %in% bird) %>% sample_n(1)
-  m[bird,plant]<-genLink(alpha=samp$alpha,beta=samp$beta,traitdiff)
-}
-}
-
-nstat<-networklevel(m,index=c("connectance","niche overlap"),level="lower")
-return(nstat)
-}
-
-netstat2<-melt(t(sapply(1:10,function(k) genNetwork()))) 
-colnames(netstat2)<-c("Iteration","Metric","value")
-
-ggplot(data=netstat2,aes(x=value)) + facet_wrap(~Metric)  + geom_density(data=netstat,fill="red",alpha=0.2)+ geom_density(fill="black",alpha=0.2) + theme_bw()
-#ggsave("Figures/Networkstat.jpeg",height=3,width=7)
-#ggsave("Figures/Networkstat.svg",height=3,width=7)
+networks$Species$Estimated<-melt(t(sapply(1:20,function(k) genNetwork(posterior=posterior)))) 
 ```
 
 ## Trait-matching
@@ -507,52 +487,108 @@ source("models/TraitMatch.R")
 #print model
 writeLines(readLines("models/TraitMatch.R"))
 
+runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
+  
+  #Inits
+  InitStage <- function(){
+    #A blank Y matrix - all present
+    initY<-rep(1,Dat$Nobs)
+    initB<-rep(0.5,Dat$Birds)
+    Ynew_pred<-rep(1,Dat$Nnewdata)
+    z<-rep(1,Dat$Nobs)
+    znew<-rep(1,Dat$Nnewdata)
+    
+    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred)}
+  
+  #Parameters to track
+  ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","Ynew_pred","fit","fitnew")
+  
+  #Jags Data
+  Yobs<-(Yobs_dat$Yobs > 0)*1
+  Ynew<-(Ynew_dat$Yobs> 0)*1
+  
+  Dat<-list(
+    Yobs=Yobs,
+    Birds=max(Yobs_dat$jBird),
+    Bird=Yobs_dat$jBird,
+    Plant=Yobs_dat$jPlant,
+    Nobs=length(Yobs),
+    NewBird=Ynew_dat$jBird,
+    NewPlant=Ynew_dat$jPlant,
+    Ynew=Ynew,
+    Nnewdata=length(Ynew),
+    Traitmatch=jTraitmatch)
+  
+  #MCMC options
+    system.time(
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=1000,n.burnin=900,n.chains=2,DIC=F)
+    )
+    return(m2)
+}
+
 #Run Model
-mod<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat,jTraitmatch=jTraitmatch)
+models$Traits$Predicted<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat,jTraitmatch=jTraitmatch)
+```
+
+```{r}
+getChains<-function(x,Bird="Bird",Plant="Plant"){
+  #extract desired info from the models
+  #bind chains
+  pc_dive<-reshape2::melt(x$BUGSoutput$sims.array)
+  colnames(pc_dive)<-c("Draw","chain","par","value")
+  
+  #extract parameter name
+  pc_dive$parameter<-data.frame(str_match(pc_dive$par,"(\\w+)"))[,-1]
+  
+  #Extract index
+  splitpc<-split(pc_dive,pc_dive$parameter)
+  
+  #single index
+  splitpc[c("alpha","beta1","detect","Ynew_pred")]<-lapply(splitpc[c("alpha","beta1","detect","Ynew_pred")],function(x){
+    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
+    pc<-data.frame(x,Index=sv)
+    return(pc)
+  }) 
+  
+  #bind all matrices back together
+  pc_dive<-bind_rows(splitpc)
+}
 
 #Get Chains
-chains<-data.frame(getChains(mod),jinterval=intervals[x])
-predicted<-data.frame(getPredictions(mod,Ynew_dat=Ynew_dat),jinterval=intervals[[1]])
+chains$Traits$Predicted<-getChains(models$Traits$Predicted,Bird="jBird",Plant="jPlant")
 ```
 
 ###Assess Convergence
 
 ```{r,cache=FALSE,fig.width=13,fig.height=5}
 ###Chains
-ggplot(chains[chains$parameter %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + facet_wrap(~parameter,scale="free") + theme_bw() + labs(col="Chain") 
+ggplot(chains$Traits$Predicted[chains$Traits$Predicted$parameter %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + facet_wrap(~parameter,scale="free") + theme_bw() + labs(col="Chain") 
 ```
 
 ```{r,fig.height=12}
-ggplot(chains[chains$parameter %in% c("detect"),],aes(x=value),alpha=0.2)  + geom_density() + facet_wrap(~Index,scale="free",ncol=3) + theme_bw()  + ggtitle("Species Level")
-
-ggplot(chains[chains$parameter %in% c("fitnew"),],aes(x=value))  + geom_density()  + theme_bw() 
+ggplot(chains$Traits$Predicted[chains$Traits$Predicted$parameter %in% c("detect"),],aes(x=value),alpha=0.2)  + geom_density() + facet_wrap(~Index,scale="free",ncol=3) + theme_bw()  + ggtitle("Species Level")
 ```
 
 ```{r,fig.height=5,fig.width=11}
-ggplot(chains[chains$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
-```
-
-### Model fit
-
-```{r}
-sumfit<-chains[chains$par %in% c("fitnew"),]
-ggplot(sumfit,aes(x=1-value)) + geom_density(fill="black") + theme_bw() + labs(x="Proportion of correctly predicted observations") + scale_x_continuous(labels=scales::percent)
-#ggsave("Figures/pred_density.svg")
-#ggsave("Figures/pred_density.jpeg",height=3,width=7)
+ggplot(chains$Traits$Predicted[chains$Traits$Predicted$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
 ```
 
 ##Generate network
 
 ```{r}
-posterior<-chains %>% filter(parameter %in% c("alpha","beta1")) %>% select(-par,jBird=Index) %>% spread(parameter,value) %>% merge(jagsIndexBird) 
+posterior<-chains$Traits$Predicted %>% filter(parameter %in% c("alpha","beta1")) %>% select(-par,jBird=Index) %>% spread(parameter,value) %>% merge(jagsIndexBird) 
 
-genNetwork<-function(){
+genLink<-function(alpha,beta,x){
+  p<-inv.logit(alpha + beta * x)
+  state<-rbinom(1,1,p)
+}
+genNetwork<-function(posterior){
 m<-matrix(nrow=length(unique(Ynew_dat$Hummingbird)),ncol=length(unique(Ynew_dat$Iplant_Double)))
 colnames(m)<-unique(Ynew_dat$Iplant_Double)
 rownames(m)<-unique(Ynew_dat$Hummingbird)
 
 for(bird in unique(Ynew_dat$Hummingbird)){
-for(plant in unique(Ynew_dat$Iplant_Double)){
+  for(plant in unique(Ynew_dat$Iplant_Double)){
   traitdiff<-traitmatchT[bird,plant]
   samp<-posterior %>% filter(Hummingbird %in% bird) %>% sample_n(1)
   m[bird,plant]<-genLink(alpha=samp$alpha,beta=samp$beta,traitdiff)
@@ -563,74 +599,56 @@ nstat<-networklevel(m,index=c("connectance","niche overlap"),level="lower")
 return(nstat)
 }
 
-netstat<-melt(t(sapply(1:100,function(k) genNetwork()))) 
-colnames(netstat)<-c("Iteration","Metric","value")
-
-ggplot(netstat,aes(x=value)) + facet_wrap(~Metric,scales="free")  + geom_density(fill="black") + theme_bw()
+networks$Traits$Predicted<-melt(t(sapply(1:20,function(k) genNetwork(posterior=posterior)))) 
 ```
 
-```{r}
-byintervalspecies<-predicted %>% group_by(Hummingbird) %>% summarize(mean=mean(Yobs-value),upper=quantile(Yobs-value,0.95),lower=quantile(Yobs-value,0.05))
-ggplot(byintervalspecies,aes(x=Hummingbird,y=mean)) + geom_point() + geom_line(aes(group=1)) + theme_bw() + facet_wrap(~Hummingbird,scales="free") + geom_hline(yintercept=0,linetype="dashed")
-```
-
-###Compare to model estimate when running the data
+###Estimated Data
 
 ```{r}
 #Run Model
-mod2<-runModel(Yobs_dat=Ynew_dat,Ynew_dat=Ynew_dat,jTraitmatch=jTraitmatch)
+models$Traits$Estimated<-runModel(Yobs_dat=Ynew_dat,Ynew_dat=Ynew_dat,jTraitmatch=jTraitmatch)
 
 #Get Chains
-chains2<-data.frame(getChains(mod2),jinterval=intervals[x])
-predicted2<-data.frame(getPredictions(mod2,Ynew_dat=Ynew_dat),jinterval=intervals[[1]])
-```
-
-###How did the fit change?
-
-```{r}
-chains$Model<-"Predict"
-chains2$Model<-"Estimate"
-alldat<-bind_rows(chains,chains2)
-ggplot(alldat[alldat$parameter %in% c("beta1_mu"),],aes(x=value,fill=Model)) + geom_density(alpha=0.2) + facet_wrap(~parameter,scale="free") + theme_bw() 
+chains$Traits$Estimated<-data.frame(getChains(models$Traits$Estimated),jinterval=intervals[x])
 ```
 
 ```{r}
-sumfit<-chains[chains$par %in% c("fitnew"),]
-sumfit2<-chains2[chains2$par %in% c("fitnew"),]
-ggplot(sumfit2,aes(x=1-value)) + geom_density(fill="black",alpha=0.2) + geom_density(data=sumfit,fill="red",alpha=0.2) + theme_bw() + labs(x="Proportion of correctly predicted observations") + scale_x_continuous(labels=scales::percent)
+posterior<-chains$Traits$Estimated %>% filter(parameter %in% c("alpha","beta1")) %>% select(-par,jBird=Index) %>% spread(parameter,value) %>% merge(jagsIndexBird) 
+
+networks$Traits$Estimated<-melt(t(sapply(1:20,function(k) genNetwork(posterior=posterior)))) 
+```
+
+# Model Comparison
+
+```{r}
+#A bit ugly, but let's assign names.
+for(x in 1:length(chains)){
+  for(y in 1:length(chains[[x]])){
+    chains[[x]][[y]]<-chains[[x]][[y]] %>% mutate(Model=names(chains)[x],Data=names(chains[[x]])[y])
+  }
+}
+
+allchains<-bind_rows(lapply(chains,bind_rows))
+
+ggplot(allchains[allchains$parameter %in% c("fitnew"),],aes(x=1-value)) + geom_density(aes(fill=Model),alpha=0.5) + theme_bw() + labs(x="Proportion of correctly predicted observations") + scale_x_continuous(labels=scales::percent) + facet_wrap(~Data)
 #ggsave("Figures/PredLinksBoth.svg")
 #ggsave("Figures/PredLinksBoth.jpeg",height=3,width=7)
-
 ```
 
-## Network
+```{r}
+for(x in 1:length(networks)){
+  for(y in 1:length(networks[[x]])){
+    networks[[x]][[y]]<-networks[[x]][[y]] %>% mutate(Model=names(networks)[x],Data=names(networks[[x]])[y])
+  }
+}
+
+allnetworks<-bind_rows(lapply(networks,bind_rows))
+colnames(allnetworks)<-c("Iteration","Metric","value","Model","Data")
+ggplot(allnetworks,aes(x=value)) + geom_density(aes(fill=Model)) + facet_grid(Data~Metric)
+```
 
 ```{r}
-posterior<-chains2 %>% filter(parameter %in% c("alpha","beta1")) %>% select(-par,jBird=Index) %>% spread(parameter,value) %>% merge(jagsIndexBird) 
-
-genNetwork<-function(){
-m<-matrix(nrow=length(unique(Ynew_dat$Hummingbird)),ncol=length(unique(Ynew_dat$Iplant_Double)))
-colnames(m)<-unique(Ynew_dat$Iplant_Double)
-rownames(m)<-unique(Ynew_dat$Hummingbird)
-
-for(bird in unique(Ynew_dat$Hummingbird)){
-for(plant in unique(Ynew_dat$Iplant_Double)){
-  traitdiff<-traitmatchT[bird,plant]
-  samp<-posterior %>% filter(Hummingbird %in% bird) %>% sample_n(1)
-  m[bird,plant]<-genLink(alpha=samp$alpha,beta=samp$beta,traitdiff)
-}
-}
-
-nstat<-networklevel(m,index=c("connectance","niche overlap"),level="lower")
-return(nstat)
-}
-
-netstat2<-melt(t(sapply(1:10,function(k) genNetwork()))) 
-colnames(netstat2)<-c("Iteration","Metric","value")
-
-ggplot(data=netstat2,aes(x=value)) + facet_wrap(~Metric)  + geom_density(data=netstat,fill="red",alpha=0.2)+ geom_density(fill="black",alpha=0.2) + theme_bw()
-#ggsave("Figures/Networkstat.jpeg",height=3,width=7)
-#ggsave("Figures/Networkstat.svg",height=3,width=7)
+#predicted<-data.frame(getPredictions(mod,Ynew_dat=Ynew_dat),jinterval=intervals[[1]])
 ```
 
 ```{r}
