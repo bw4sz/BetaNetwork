@@ -21,6 +21,7 @@ library(gridExtra)
 library(boot)
 library(foreach)
 library(bipartite)
+library(tidyr)
 library(doSNOW)
 
 opts_chunk$set(message=FALSE,warning=FALSE,fig.width=10,fig.height=7,echo=TRUE,cache=F,fig.align='center',fig.path="figureObserved/")
@@ -320,10 +321,10 @@ $$ \tau_{\beta_1} \sim Half cauchy(0,1,1)$$
 
 ```{r}
 #Source model
-source("models/TraitMatchPoisson.R")
+source("models/TraitMatch.R")
   
 #print model
-writeLines(readLines("models/TraitMatchPoisson.R"))
+writeLines(readLines("models/TraitMatch.R"))
   
 #Cut Model into timeslives
 indat<-indat %>% arrange(DateP)
@@ -337,8 +338,8 @@ nets<-list()
 predicted<-list()
 
 #predict up to the final interval
-cl<-makeCluster(3)
-registerDoSNOW(cl)
+#cl<-makeCluster(3)
+#registerDoSNOW(cl)
 out<-foreach (x=1:(length(intervals)-1),.export=c("intervals","jTraitmatch","indat")) %do% {
   library(R2jags)
   library(dplyr)
@@ -350,63 +351,107 @@ out<-foreach (x=1:(length(intervals)-1),.export=c("intervals","jTraitmatch","ind
   Ynew_dat<-indat[indat$jinterval > intervals[x],]
   
   #Run Model
-  mod<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat,interval=intervals[x],jTraitmatch=jTraitmatch)
+  mod<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat,jTraitmatch=jTraitmatch)
   
   #Get Chains
-  chains<-data.frame(getChains(mod),interval=intervals[x])
+  chains<-data.frame(getChains(mod),jinterval=intervals[x])
   
-  predicted<-data.frame(getPredictions(mod,Ynew_dat=Ynew_dat),interval=intervals[[x]])
+  predicted<-data.frame(getPredictions(mod,Ynew_dat=Ynew_dat),jinterval=intervals[[x]])
   return(list(chains,predicted))
 }
 
 alldat<-bind_rows(lapply(out,function(x) x[[1]]))
 allpred<-bind_rows(lapply(out,function(x) x[[2]]))
-stopCluster(cl)
+#stopCluster(cl)
+
+save.image("ObservedModel.RData")
 ```
 
 ##Assess Convergence
 
 ```{r,cache=FALSE,fig.width=13,fig.height=5}
 ###Chains
-ggplot(alldat[alldat$par %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + facet_grid(par~interval,scale="free") + theme_bw() + labs(col="Chain") 
+ggplot(alldat[alldat$parameter %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + facet_grid(parameter~interval,scale="free") + theme_bw() + labs(col="Chain") 
 ```
 
 
 ```{r,fig.height=12}
-ggplot(alldat[alldat$par %in% c("detect"),],aes(x=estimate,fill=as.factor(interval)),alpha=0.2)  + geom_density() + facet_wrap(~species,scale="free",ncol=3) + theme_bw()  + ggtitle("Species Level")
+ggplot(alldat[alldat$parameter %in% c("detect"),],aes(x=value,fill=as.factor(jinterval)),alpha=0.2)  + geom_density() + facet_wrap(~Index,scale="free",ncol=3) + theme_bw()  + ggtitle("Species Level")
 
-ggplot(alldat[alldat$par %in% c("fitnew"),],aes(x=estimate,fill=as.factor(interval)))  + geom_density()  + theme_bw() 
+ggplot(alldat[alldat$parameter %in% c("fitnew"),],aes(x=value,fill=as.factor(interval)))  + geom_density()  + theme_bw() 
 ```
 
 ```{r,fig.height=5,fig.width=11}
-ggplot(alldat[alldat$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
+ggplot(alldat[alldat$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_grid(interval~par,scales="free")
 ```
 
 #Posteriors
 
 ## Strength of trait-matching
 
-```{r,cache=FALSE,fig.width=11,fig.height=14}
+```{r,cache=FALSE,fig.width=11,fig.height=14} 
 ###Posterior Distributions
-ggplot(alldat[alldat$par %in% c("beta1_mu"),],aes(x=as.factor(interval),y=estimate)) + geom_violin(position='identity',fill="black")  + theme_bw() + labs(x="Date") + scale_x_discrete(labels=unique(indat$interval))
+ggplot(alldat[alldat$par %in% c("beta1_mu"),],aes(x=as.factor(jinterval),y=value)) + geom_violin(position='identity',fill="black")  + theme_bw() + labs(x="Date") + scale_x_discrete(labels=unique(indat$interval))
 ```
 
 ## Model fit
 
 ```{r}
-sumfit<-alldat[alldat$par %in% c("fitnew"),] %>% group_by(interval) %>% summarize(mean=mean(estimate),lower=quantile(estimate,0.05),upper=quantile(estimate,0.95))
+sumfit<-alldat[alldat$par %in% c("fitnew"),]
+ggplot(sumfit,aes(x=1-value)) + geom_density(fill="black") + theme_bw() + labs(x="Proportion of correctly predicted links") + scale_x_continuous(labels=scales::percent)
+ggsave("Figures/pred_density.svg")
+```
 
-ggplot(sumfit,aes(x=as.factor(interval),y=mean)) + geom_point()+ geom_ribbon(aes(ymax=upper,ymin=lower,group=1),alpha=0.2)  + theme_bw() + labs(x="Date",y="Prediction residuals") + scale_x_discrete(labels=unique(indat$interval))
+#Generate network
+
+```{r}
+posterior<-alldat %>% filter(parameter %in% c("alpha","beta1")) %>% select(-par,jBird=Index) %>% spread(parameter,value) %>% merge(jagsIndexBird) 
+
+genNetwork<-function(){
+  m<-matrix(nrow=length(unique(Ynew_dat$Hummingbird)),ncol=length(unique(Ynew_dat$Iplant_Double)))
+colnames(m)<-unique(Ynew_dat$Iplant_Double)
+rownames(m)<-unique(Ynew_dat$Hummingbird)
+
+for(bird in unique(Ynew_dat$Hummingbird)){
+  for(plant in unique(Ynew_dat$Iplant_Double)){
+    traitdiff<-traitmatchT[bird,plant]
+    samp<-posterior %>% filter(Hummingbird %in% bird) %>% sample_n(1)
+    m[bird,plant]<-genLink(alpha=samp$alpha,beta=samp$beta,traitdiff)
+  }
+}
+
+nstat<-networklevel(m,index=c("connectance","niche overlap"),level="lower")
+return(nstat)
+}
+
+netstat<-melt(t(sapply(1:10,function() genNetwork()))) 
+  colnames(netstat)<-c("Iteration","Metric","value")
+
+ggplot(netstat,aes(x=value)) + facet_wrap(~Var2)  + geom_density(fill="black") + theme_bw()
 ```
 
 ```{r}
-byintervalspecies<-predicted %>% group_by(Hummingbird,interval) %>% summarize(mean=mean(Yobs-estimate),upper=quantile(Yobs-estimate,0.95),lower=quantile(Yobs-estimate,0.05))
-ggplot(byintervalspecies,aes(x=interval,y=mean)) + geom_point() + geom_line(aes(group=1)) + geom_ribbon(aes(group=1,ymax=upper,ymin=lower),col="black",alpha=0.2) + theme_bw() + facet_wrap(~Hummingbird,scales="free")
+byintervalspecies<-allpred %>% group_by(Hummingbird,jinterval) %>% summarize(mean=mean(Yobs-value),upper=quantile(Yobs-value,0.95),lower=quantile(Yobs-value,0.05))
+ggplot(byintervalspecies,aes(x=jinterval,y=mean)) + geom_point() + geom_line(aes(group=1)) + theme_bw() + facet_wrap(~Hummingbird,scales="free") + geom_hline(yintercept=0,linetype="dashed")
 
 byinterval<-Ynew_pred %>% group_by(interval) %>% summarize(mean=mean(abs(Yobs-estimate)),upper=quantile(abs(Yobs-estimate),0.95),lower=quantile(abs(Yobs-estimate),0.05))
-ggplot(byinterval,aes(x=interval,y=mean)) + geom_point() + geom_line(aes(group=1)) + geom_ribbon(aes(group=1,ymax=upper,ymin=lower),col="black",alpha=0.2) + theme_bw() 
+ggplot(byinterval,aes(x=interval,y=mean)) + geom_point() + geom_line(aes(group=1))  + theme_bw() 
 
+```
 
+#Get 
+Example Violet-Tailed Sylph
+
+```{r}
+byintervalplant<-allpred %>% filter(Hummingbird=="Violet-tailed Sylph") %>% group_by(Iplant_Double,jinterval) %>% summarize(mean=mean(Yobs-value),upper=quantile(Yobs-value,0.95),lower=quantile(Yobs-value,0.05))
+
+ggplot(byintervalplant,aes(x=Iplant_Double,col=as.factor(jinterval),y=mean)) + geom_point() + coord_flip() +  scale_color_discrete("Date",labels=unique(indat$interval))
+
+example<-allpred %>% filter(Hummingbird=="Violet-tailed Sylph",Iplant_Double=="Macleania stricta",jID==34) 
+ggplot(example,aes(x=Yobs-value,fill=as.factor(jinterval))) + geom_density(alpha=0.8)  + theme_bw()
+```
+
+```{r}
 ```
 
 ##Discrepancy 

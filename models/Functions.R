@@ -70,23 +70,25 @@ prepData<-function(indatraw){
 
 #run a jags model
 
-runModel<-function(Yobs_dat,Ynew_dat,interval,jTraitmatch){
+runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   
   #Inits
   InitStage <- function(){
     #A blank Y matrix - all present
-    initY<-array(dim=c(Dat$Birds,Dat$Plants),max(Dat$Yobs)+1)
+    initY<-rep(1,Dat$Nobs)
     initB<-rep(0.5,Dat$Birds)
-    Ynew_pred<-rep(max(Dat$Ynew),Dat$Nnewdata)
-    N<-rep(max(Dat$Yobs)+1,Dat$Nobs)
-    list(dcam=initB,N=N,Nnew=Ynew_pred,Ynew_pred=Ynew_pred)}
+    Ynew_pred<-rep(1,Dat$Nnewdata)
+    z<-rep(1,Dat$Nobs)
+    znew<-rep(1,Dat$Nnewdata)
+    
+    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred)}
   
   #Parameters to track
   ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","Ynew_pred","fit","fitnew")
   
   #Jags Data
-  Yobs<-Yobs_dat$Yobs
-  Ynew<-Ynew_dat$Yobs
+  Yobs<-(Yobs_dat$Yobs > 0)*1
+  Ynew<-(Ynew_dat$Yobs> 0)*1
   
   Dat<-list(
     Yobs=Yobs,
@@ -102,7 +104,7 @@ runModel<-function(Yobs_dat,Ynew_dat,interval,jTraitmatch){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatchPoisson.jags",n.thin=1,n.iter=40000,n.burnin=39000,n.chains=1,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=200,n.burnin=100,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -114,7 +116,7 @@ getChains<-function(mod){
 getPredictions<-function(mod,Ynew_dat){
   pars_detect<-getPar(mod,Bird="jBird",Plant="jPlant")
   Ynew_pred<-pars_detect %>% filter(parameter=="Ynew_pred")
-  Ynew_dat$Index<-1:nrow(Ynew_dat)
+  Ynew_dat<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat))
   Ynew_pred<-merge(Ynew_pred,Ynew_dat,by="Index")
   return(Ynew_pred)
 }
@@ -142,76 +144,7 @@ getPar<-function(x,Bird="Bird",Plant="Plant"){
   pc_dive<-bind_rows(splitpc)
 }
 
-genNetwork<-function(x){
-  #input matrix
-  aggm<-matrix(nrow=nrow(jagsIndexBird),ncol=nrow(jagsIndexPlants),data=0)
-  for (j in 1:nrow(x)){
-    aggm[x[j,"jBird"],x[j,"jPlant"]]<-rpois(1,lambda=x[j,"phi"])
-  }
-}
-
-#fits a chisquared residual for a given poisson function
-modelFit<-function(mod){
-  #Geneate Network
-  genNetwork(mod)
-  
-  #Compare Network to remaining data
-  #For each link
-  lapply(generated_networks,function(x){
-    genNetwork
-  })
-  
-}
-
-#sample trajectory for a given posterior
-trajF<-function(alpha,beta1,trait){
-  g<-data.frame(alpha,beta1)
-  
-  #label rows
-  g$id<-1:nrow(g)
-  
-  sampletraj<-g %>% group_by(id) %>% do(traj(.$alpha,.$beta1,trait=trait)) %>% group_by(trait) %>% summarize(mean=mean(y),lower=quantile(y,0.05),upper=quantile(y,0.95))
-  return(sampletraj)
-}
-
-#sample trajectory for a given posterior using quantile or hdi interval
-traj<-function(alpha,beta1,trait){
-  
-  #fit regression for each input estimate
-  v=exp(alpha + beta1 * trait)
-  
-  sampletraj<-data.frame(trait=trait,y=as.numeric(v))
-  
-  #Compute CI intervals
-  return(sampletraj)
-}
-
-
-#plots
-#converge of chains
-chainplot<-function(pars,param,title){
-  ggplot(pars[pars$par %in% param,],aes(x=Draw,y=estimate,col=as.factor(Chain))) + geom_line() + facet_wrap(~species,scale="free") + theme_bw() + labs(col="Chain") + ggtitle(title)  
-}
-
-#posteriors
-tracegplot<-function(pars,param,title){
-  ggplot(pars[pars$par %in% param,],aes(x=estimate)) + geom_histogram() + ggtitle("Estimate of Intercept") + theme_bw() + ggtitle(title)
-}
-
-#Generate network
-networkStat<-function(statname){
-  lapply(nstat,function(x){
-    nstat<-networklevel(aggm,index=statname,level="lower")
-  })
-  netstat<-melt(t(sapply(1:500,function(k) genNetwork(x)))) 
-  colnames(netstat)<-c("Iteration","Metric","value")
-  return(netstat)
-}
-
-genNetwork<-function(x){
-  #input matrix
-  aggm<-matrix(nrow=nrow(jagsIndexBird),ncol=nrow(jagsIndexPlants),data=0)
-  for (j in 1:nrow(x)){
-    aggm[x[j,"jBird"],x[j,"jPlant"]]<-rbinom(1,lambda=x[j,"phi"])
-  }
+genLink<-function(alpha,beta1,x){
+  p<-inv.logit(alpha+beta1*x)
+  state<-rbinom(1,1,p)
 }

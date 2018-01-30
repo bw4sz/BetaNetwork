@@ -14,7 +14,7 @@
     Yobs[x] ~ dbern(p[x])
     
     #Observed discrepancy
-    E[x]<-abs(Yobs[x]- s[x])
+    E[x]<-abs(Yobs[x]- s[x])/Nobs
     }
     
     #Assess Model Fit - Predict remaining data
@@ -37,7 +37,7 @@
     
     for(x in 1:Birds){
     logit(detect[x])<-dcam[x]
-    dcam[x]~dnorm(omega_mu,omega_tau)
+    dcam[x]~dnorm(0,0.386)
     }
     
     #Process Model
@@ -52,10 +52,6 @@
     beta1[i] ~ dnorm(beta1_mu,beta1_tau)    
     
     }
-    
-    #OBSERVATION PRIOR
-    omega_mu ~ dnorm(0,0.386)
-    omega_tau ~ dunif(0,10)
     
     #Group process priors
     

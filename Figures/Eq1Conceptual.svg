@@ -15,7 +15,10 @@
    id="svg2"
    version="1.1"
    inkscape:version="0.91 r13725"
-   sodipodi:docname="Eq1Conceptual.svg">
+   sodipodi:docname="Eq1Conceptual.svg"
+   inkscape:export-filename="/Users/ben/Documents/BetaNetwork/Figures/Eq1Conceptual.png"
+   inkscape:export-xdpi="300"
+   inkscape:export-ydpi="300">
   <defs
      id="defs4">
     <marker
@@ -105,11 +108,11 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="2.2421047"
-     inkscape:cx="442.56386"
+     inkscape:zoom="1.1210524"
+     inkscape:cx="370.08732"
      inkscape:cy="421.67872"
      inkscape:document-units="px"
-     inkscape:current-layer="layer1"
+     inkscape:current-layer="g80052"
      showgrid="false"
      inkscape:window-width="1440"
      inkscape:window-height="855"
@@ -465,13 +468,29 @@
            clip-path="url(#cpMC4wMHwzMDAuMDB8MjM2LjAwfDAuMDA=)"
            id="g79941">
           <text
-             x="123.69"
-             y="228"
+             x="91.577316"
+             y="231.56807"
              style="font-size:11px;font-family:Arial"
              textLength="95.39px"
              lengthAdjust="spacingAndGlyphs"
-             id="text79943">Interaction Intensity</text>
+             id="text79943">
+            <tspan
+               style="font-size:20px"
+               id="tspan17064">Interaction Intensity</tspan>
+          </text>
         </g>
+        <text
+           x="-135.70575"
+           y="40.531635"
+           style="font-size:11px;font-family:Arial"
+           textLength="95.39px"
+           lengthAdjust="spacingAndGlyphs"
+           id="text79943-9"
+           transform="matrix(0,-1,1,0,0,0)">
+          <tspan
+             style="font-size:20px"
+             id="tspan17066">Count</tspan>
+        </text>
       </g>
       <rect
          id="rect79828"

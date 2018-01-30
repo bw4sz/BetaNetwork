@@ -31,7 +31,7 @@ cat("
     
     for(x in 1:Birds){
     logit(detect[x])<-dcam[x]
-    dcam[x]~dnorm(omega_mu,omega_tau)
+      dcam[x]~dnorm(0,0.386)
     }
     
     #Process Model
@@ -46,10 +46,6 @@ cat("
     beta1[i] ~ dnorm(beta1_mu,beta1_tau)    
     
     }
-    
-    #OBSERVATION PRIOR
-    omega_mu ~ dnorm(0,0.386)
-    omega_tau ~ dunif(0,100)
     
     #Group process priors
     

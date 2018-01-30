@@ -120,15 +120,15 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="1.9883871"
-     inkscape:cx="555.08135"
+     inkscape:cx="473.35682"
      inkscape:cy="442.05577"
      inkscape:document-units="px"
-     inkscape:current-layer="layer1"
+     inkscape:current-layer="g74631"
      showgrid="false"
      inkscape:window-width="1786"
      inkscape:window-height="962"
-     inkscape:window-x="1577"
-     inkscape:window-y="66"
+     inkscape:window-x="1468"
+     inkscape:window-y="47"
      inkscape:window-maximized="0" />
   <metadata
      id="metadata7">
@@ -743,8 +743,12 @@
            lengthAdjust="spacingAndGlyphs"
            textLength="95.39px"
            style="font-size:11px;font-family:Arial"
-           y="175"
-           x="110.1">Interaction Intensity</text>
+           y="180.53212"
+           x="88.474434">
+          <tspan
+             style="font-size:20px"
+             id="tspan4275">Interaction Intensity</tspan>
+        </text>
       </g>
       <rect
          id="rect74596"
@@ -845,6 +849,23 @@
            style="font-size:8.80000019px;font-family:Arial"
            y="104.47"
            x="343.81">September</text>
+      </g>
+      <g
+         transform="translate(-60.272514,33.955645)"
+         id="g74592-6"
+         clip-path="url(#cpMC4wMHwzOTguMDB8MTgzLjAwfDAuMDA=)">
+        <text
+           id="text74594-5"
+           lengthAdjust="spacingAndGlyphs"
+           textLength="95.39px"
+           style="font-size:11px;font-family:Arial"
+           y="63.900337"
+           x="-69.221123"
+           transform="matrix(0,-1,1,0,0,0)">
+          <tspan
+             style="font-size:20px"
+             id="tspan4275-6">Count</tspan>
+        </text>
       </g>
     </g>
   </g>
