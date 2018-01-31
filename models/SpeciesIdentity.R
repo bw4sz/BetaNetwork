@@ -20,7 +20,7 @@ cat("
       Ynew_pred[x]~dbern(snew[x])
     
       #Assess fit, proportion of corrected predicted observations
-      E.new[x]<-abs(Ynew[x]-Ynew_pred[x])/Nnewdata
+      Enew[x]<-abs(Ynew[x]-Ynew_pred[x])/Nnewdata
 
     }
     
@@ -38,7 +38,7 @@ cat("
 
     #derived posterior check
     fit<-sum(E[]) #Discrepancy for the observed data
-    fitnew<-sum(E.new[])
+    fitnew<-sum(Enew[])
     }
     ",fill=TRUE)
 

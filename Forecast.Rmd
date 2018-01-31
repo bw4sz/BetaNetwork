@@ -27,6 +27,7 @@ library(tidyr)
 library(doSNOW)
 library(betalink)
 library(igraph)
+library(ggbiplot)
 
 opts_chunk$set(message=FALSE,warning=FALSE,fig.width=10,fig.height=7,echo=F,cache=F,fig.align='center',fig.path="figureObserved/")
 
@@ -253,22 +254,17 @@ indatraw$Yobs<-1
 indatraw<-indatraw[,c("Hummingbird","Iplant_Double","ID","Time","Month","Year","Transect_R","ele","DateP","Yobs","Day","Survey_Type","Pierce")]
 ```
 
-
 ```{r}
 ##Summarize daily interactions
 indatraw<-indatraw %>% group_by(Hummingbird,Iplant_Double,ID,Day) %>% summarize(Yobs=sum(Yobs),Time=unique(Time),Transect_R=unique(Transect_R),Month=unique(Month),Year=unique(Year),ele=mean(ele),DateP=unique(DateP),Survey_Type=unique(Survey_Type)) %>% ungroup()
 ```
 
-#Static betadiversity
-```{r}
-
-```
 
 ```{r}
 indat<-prepData(indatraw)
 ```
 
-#Modeling Fitting
+#Models
 
 ```{r}
 models<-list()
@@ -322,7 +318,6 @@ Ynew_dat<-species_dat[species_dat$jinterval > intervals[1],]
 
 $$ Yobs_{i,j} \sim Bernoulli(N(0,1.68)) $$
 
-
 ```{r}
 #Source model
 source("models/SpeciesIdentity.R")
@@ -343,7 +338,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
     list(Ynew_pred=Ynew_pred)}
   
   #Parameters to track
-  ParsStage <- c("alpha","Ynew_pred","fit","fitnew")
+  ParsStage <- c("alpha","Ynew_pred","fit","fitnew","Enew")
   
   #Jags Data
   Yobs<-(Yobs_dat$Yobs > 0)*1
@@ -362,7 +357,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=2000,n.burnin=1500,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=3500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -391,8 +386,8 @@ getChains<-function(mod){
     pc<-data.frame(x,sv)
     })
   
-  splitpc[c("Ynew_pred")]<-lapply(
-    splitpc[c("Ynew_pred")],function(x){
+  splitpc[c("Ynew_pred","Enew")]<-lapply(
+    splitpc[c("Ynew_pred","Enew")],function(x){
     sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
     pc<-data.frame(x,Index=sv)
     })
@@ -482,7 +477,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
     list(Ynew_pred=Ynew_pred)}
   
   #Parameters to track
-  ParsStage <- c("alpha","Ynew_pred","fit","fitnew","E.new")
+  ParsStage <- c("alpha","Ynew_pred","fit","fitnew","Enew")
   
   #Jags Data
   Yobs<-(Yobs_dat$Yobs > 0)*1
@@ -502,7 +497,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=2000,n.burnin=1500,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=3500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -531,8 +526,8 @@ getChains<-function(mod){
     pc<-data.frame(x,sv)
     })
   
-  splitpc[c("Ynew_pred")]<-lapply(
-    splitpc[c("Ynew_pred")],function(x){
+  splitpc[c("Ynew_pred","Enew")]<-lapply(
+    splitpc[c("Ynew_pred","Enew")],function(x){
     sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
     pc<-data.frame(x,Index=sv)
     })
@@ -595,7 +590,7 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
     list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred)}
   
   #Parameters to track
-  ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","Ynew_pred","fit","fitnew")
+  ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","Ynew_pred","fit","fitnew","Enew")
   
   #Jags Data
   Yobs<-(Yobs_dat$Yobs > 0)*1
@@ -615,7 +610,7 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=2000,n.burnin=1500,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=4000,n.burnin=3500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -638,7 +633,7 @@ getChains<-function(x,Bird="Bird",Plant="Plant"){
   splitpc<-split(pc_dive,pc_dive$parameter)
   
   #single index
-  splitpc[c("alpha","beta1","detect","Ynew_pred")]<-lapply(splitpc[c("alpha","beta1","detect","Ynew_pred")],function(x){
+  splitpc[c("alpha","beta1","detect","Ynew_pred","Enew")]<-lapply(splitpc[c("alpha","beta1","detect","Ynew_pred","Enew")],function(x){
     sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
     pc<-data.frame(x,Index=sv)
     return(pc)
@@ -668,6 +663,10 @@ ggplot(chains$Traits[chains$Traits$parameter %in% c("alpha_mu","beta1_mu"),],aes
 ggplot(chains$Traits[chains$Traits$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
 ```
 
+## Abundance 
+
+Using the counts from the transects. Abundance is especially important to model, since its fluctuating all the time.
+
 # Model Comparison
 
 ```{r}
@@ -683,7 +682,9 @@ ggplot(allchains[allchains$parameter %in% c("fitnew"),],aes(x=1-value)) + geom_d
 #ggsave("Figures/PredLinksBoth.jpeg",height=3,width=7)
 ```
 
-## Network statistics
+## Predicted network statistics
+
+Dashed line is the observed network from the time-series.
 
 ```{r}
 #Get network statistics for all models.
@@ -711,9 +712,10 @@ ggplot(allnetworks,aes(x=value)) + geom_density(aes(fill=Model),alpha=0.5) + fac
 ```
 
 # Predicted betadiversity
-From Poisot 2016 "Network Comparison"
 
-Dissimilairty in interactions(Beta_WN from Poisot 2012)
+Dissimilairty in interactions (Beta_WN from Poisot 2012)
+
+Dashed line is the observed network from the time-series.
 
 ```{r}
 #Observed dissimalarity
@@ -753,6 +755,16 @@ levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "OS"]<-"Inter
 levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "S"]<-"Species Turnover"
 
 ggplot(betastat %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value,fill=Model)) + geom_density() + facet_wrap(~Betadiversity,scales="free",nrow=1) + geom_vline(data=mobs_dis  %>% filter(!Betadiversity %in% "Species Turnover"),aes(xintercept=value),linetype="dashed")
+```
+
+# Model overlap
+
+Create a kind of venn diagram on PCA of model similarity based on per link discrepency. 
+
+```{r}
+Enew<-allchains %>% filter(parameter == "Enew") %>% mutate(Index=as.numeric(as.character(Index)))
+
+Enew<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index") %>% group_by(Model,Hummingbird,Iplant_Double) %>% summarize(mean=mean(inv.logit(value),na.rm=T)) 
 ```
 
 ```{r}
