@@ -75,10 +75,15 @@ getChains<-function(mod){
 }
 
 getPredictions<-function(pars,Ynew_dat){
-  Ynew_pred<-pars %>% filter(parameter=="Ynew_pred")
-  Ynew_dat<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat))
-  Ynew_pred<-merge(Ynew_pred,Ynew_dat,by="Index")
-  return(Ynew_pred)
+  Ynew_pred<-pars %>% filter(parameter=="Ynew_pred") %>% mutate(Index=as.numeric(as.character(Index)))
+  Ynew_pred<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Ynew_pred,by="Index")
+  predictions<-split(Ynew_pred,Ynew_pred$Draw,Ynew_pred$chain)
+  predictions<-lapply(predictions,function(x){
+    m<-acast(x,Hummingbird~Iplant_Double,value.var="value",fun.aggregate = sum)
+    m<-(m > 0) * 1
+    return(m)
+  })
+  return(predictions)
 }
 
 getPar<-function(x,Bird="Bird",Plant="Plant"){

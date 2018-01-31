@@ -18,7 +18,7 @@
       logit(snew[x])<-alpha[NewBird[x],NewPlant[x]]
       Ynew_pred[x]~dbern(snew[x])
     
-      #Assess fit, proportion of corrected predicted links
+      #Assess fit, proportion of corrected predicted observations
       E.new[x]<-abs(Ynew[x]-Ynew_pred[x])/Nnewdata
 
     }
