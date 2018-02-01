@@ -141,7 +141,6 @@ traitmatchT<-traitmatchT[sort(rownames(traitmatchT)),sort(colnames(traitmatchT))
 ##Elevation ranges
 
 elevH<-read.csv("data/HummingbirdElevation.csv",row.names=1)
-head(elevH)
 colnames(elevH)[5]<-"Elevation"
 elevH$Bird<-1:nrow(elevH)
 
@@ -321,8 +320,6 @@ source("models/SpeciesIdentity.R")
 writeLines(readLines("models/SpeciesIdentity.R"))
 ```
 
-## Predicted
-
 ```{r}
 #Run Model
 runModel<-function(Yobs_dat,Ynew_dat){
@@ -352,7 +349,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=0,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=3000,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -401,7 +398,7 @@ networks$Random<-getPredictions(pars=chains$Random,Ynew_dat = Ynew_dat)
 
 ###Assess Convergence
 
-```{r,cache=FALSE,fig.width=8,fig.height=4}
+```{r,cache=FALSE,fig.width=5,fig.height=2}
 ###Chains
 chains$Random %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~parameter)
 ```
@@ -460,8 +457,6 @@ source("models/SpeciesIdentity.R")
 writeLines(readLines("models/SpeciesIdentity.R"))
 ```
 
-## Predicted
-
 ```{r}
 #Run Model
 runModel<-function(Yobs_dat,Ynew_dat){
@@ -492,7 +487,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=0,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=3000,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -542,7 +537,7 @@ networks$Species<-getPredictions(chains$Species,Ynew_dat = Ynew_dat)
 
 ###Assess Convergence
 
-```{r,cache=FALSE,fig.width=8,fig.height=5}
+```{r,cache=FALSE,fig.width=5,fig.height=2}
 ###Chains
 chains$Species %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~parameter)
 ```
@@ -605,7 +600,7 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=4000,n.burnin=0,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=10000,n.burnin=9000,n.chains=2,DIC=F)
     )
     return(m2)
 }
