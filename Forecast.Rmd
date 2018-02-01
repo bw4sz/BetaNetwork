@@ -27,7 +27,6 @@ library(tidyr)
 library(doSNOW)
 library(betalink)
 library(igraph)
-library(ggbiplot)
 
 opts_chunk$set(message=FALSE,warning=FALSE,fig.width=10,fig.height=7,echo=F,cache=F,fig.align='center',fig.path="figureObserved/")
 
@@ -138,7 +137,6 @@ traitmatchT<-round(traitmatchF[rownames(traitmatchF) %in% dath$Hummingbird,colna
 traitmatchT<-traitmatchT[sort(rownames(traitmatchT)),sort(colnames(traitmatchT))]
 ```
 
-
 ```{r}
 ##Elevation ranges
 
@@ -161,7 +159,6 @@ dathp<-merge(dath,elevP,by="Iplant_Double")
 datph<-merge(dathp,elevH,by="Hummingbird")
 ```
 
-
 ```{r}
 #What elevation transect is each observation in?
 #The camera data need to be inferred from the GPS point.
@@ -183,7 +180,6 @@ datph[datph$Survey_Type=='Transect',"ele"]<-sapply(tran_elev,function(x){
 mean(as.numeric(str_split(x,"_")[[1]]))
 })
 ```
-
 
 ```{r}
 ### Define Time Events
@@ -256,9 +252,8 @@ indatraw<-indatraw[,c("Hummingbird","Iplant_Double","ID","Time","Month","Year","
 
 ```{r}
 ##Summarize daily interactions
-indatraw<-indatraw %>% group_by(Hummingbird,Iplant_Double,ID,Day) %>% summarize(Yobs=sum(Yobs),Time=unique(Time),Transect_R=unique(Transect_R),Month=unique(Month),Year=unique(Year),ele=mean(ele),DateP=unique(DateP),Survey_Type=unique(Survey_Type)) %>% ungroup()
+indatraw<-indatraw %>% dplyr::group_by(Hummingbird,Iplant_Double,ID,Day,Time) %>% dplyr::summarize(Yobs=sum(Yobs),Transect_R=unique(Transect_R),Month=unique(Month),Year=unique(Year),ele=mean(ele),DateP=unique(DateP),Survey_Type=unique(Survey_Type)) %>% ungroup()
 ```
-
 
 ```{r}
 indat<-prepData(indatraw)
@@ -357,7 +352,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=3500,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=0,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -497,7 +492,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=3500,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=0,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -610,7 +605,7 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=4000,n.burnin=3500,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=4000,n.burnin=0,n.chains=2,DIC=F)
     )
     return(m2)
 }
