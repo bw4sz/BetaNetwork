@@ -46,100 +46,35 @@ paste("Run Completed at",Sys.time())
 ```
 
 ```{r}
-#Load data
+fulldat<-read.csv("data/fulldat.csv",row.names=1)
+fulldat$timestamp<-as.POSIXct(fulldat$timestamp)
+```
+
+
+```{r}
 #read in flower morphology data, comes from Nectar.R
 fl.morph<-read.csv("data/FlowerMorphology.csv")
+missing<-fulldat %>% anti_join(fl.morph)
 
-#use effective corolla where possible.
-fl.morph$Corolla<-fl.morph$EffectiveCorolla
+#remove 
+fulldat<-fulldat %>% filter(!Iplant_Double %in% missing$Iplant_Double)
 
-fl.morph[is.na(fl.morph$Corolla),"Corolla"]<-fl.morph[is.na(fl.morph$Corolla),"TotalCorolla"]
-
-#First row is empty
-fl.morph<-fl.morph[-1,]
-
+#TraitMatching Matrix
 #Bring in Hummingbird Morphology Dataset, comes from
 hum.morph<-read.csv("data/HummingbirdMorphology.csv")
 
 #taxonomy change, we are calling them Crowned Woodnymph's now.
 hum.morph$English<-as.character(hum.morph$English)
-
 hum.morph$English[hum.morph$English %in% "Green-crowned Woodnymph"]<-"Crowned Woodnymph"
 
-#Bring in Interaction Matrix
-int<-read.csv("data/HummingbirdInteractions.csv")
+traitmatch<-abs(t(sapply(hum.morph$Bill,function(x){x-fl.morph$Corolla})))
+rownames(traitmatch)<-hum.morph$English
+colnames(traitmatch)<-fl.morph$Iplant_Double
 
-int$timestamp<-as.POSIXct(paste(int$Time,int$DateP),format="%H:%M:%S %Y-%m-%d")
+traitmatch<-round(traitmatch[rownames(traitmatch) %in% fulldat$Hummingbird,colnames(traitmatch) %in% fulldat$Iplant_Double],2)
+traitmatch<-traitmatch[sort(rownames(traitmatch)),sort(colnames(traitmatch))]
 
-#one date error
-int[int$DateP %in% '2013-07-25',"Month"]<-7
-
-#one duplicate camera error, perhaps two GPS records.
-int<-int[!(int$ID %in% "FH1108" & int$Date_F %in% '2014-12-01'),]
-
-#Correct known taxonomic disagreements, atleast compared to traits
-int[int$Iplant_Double %in% "Onagaraceae fuschia","Iplant_Double"]<-"Fuchsia macrostigma"
-int[int$Iplant_Double=="Alloplectus purpureus","Iplant_Double"]<-"Glossoloma purpureum"
-int[int$Iplant_Double=="Capanea affinis","Iplant_Double"]<-"Kohleria affinis"
-int[int$Iplant_Double=="Columnea cinerea","Iplant_Double"]<-"Columnea mastersonii"
-int[int$Iplant_Double=="Alloplectus teuscheri","Iplant_Double"]<-"Drymonia teuscheri"
-int[int$Iplant_Double=="Drymonia collegarum","Iplant_Double"]<-"Alloplectus tetragonoides"
-
-#Some reasonable level of presences, 4 points
-keep<-names(which(table(int$Hummingbird) > 4))
-
-#int<-int[int$Hummingbird %in% keep & !int$Hummingbird %in% c("Sparkling Violetear"),]
-
-m.dat<-droplevels(int[colnames(int) %in% c("ID","Video","Time","Hummingbird","Sex","timestamp","TransectID","Transect_R","Iplant_Double","Pierce","DateP","Month","ele","Type")])
-
-#Does the data come from camera or transect?
-m.dat$Type<-(is.na(m.dat$TransectID))*1
-
-m.dat$Year<-years(as.Date(m.dat$DateP))
-
-#one missing date
-m.dat$Year[m.dat$Year %in% 2012]<-2013
-m.dat$Year[m.dat$Year %in% 2106]<-2016
-
-#Number of bird species
-h_species<-nlevels(m.dat$Hummingbird)
-
-#Number of plant species
-plant_species<-nlevels(m.dat$Iplant_Double)
-
-#Get english name
-dath<-merge(m.dat,hum.morph, by.x="Hummingbird",by.y="English",keep=all)
-
-#Merge to flowers
-int.FLlevels<-levels(factor(dath$Iplant_Double))
-
-#Which flowers are we missing info for?
-missingTraits<-int.FLlevels[!int.FLlevels %in% fl.morph$X]
-
-#print(paste("Missing Trait Information:",missingTraits))
-dath<-merge(dath,fl.morph, by.x="Iplant_Double",by.y="X")
-
-#Drop piercing events, since they don't represent correlation
-#dath<-dath[!dath$Pierce %in% c("y","Y"),]
-```
-
-```{r}
-##Match Species to Morphology
-#observed traitmatching
-traitmatchF<-abs(t(sapply(hum.morph$Bill,function(x){x-fl.morph$Corolla})))
-rownames(traitmatchF)<-hum.morph$English
-colnames(traitmatchF)<-fl.morph$Group.1
-```
-
-```{r}
-#match names #Round to 2 decimals #Convert to cm for winbugs, avoids numerical underflow
-traitmatchT<-round(traitmatchF[rownames(traitmatchF) %in% dath$Hummingbird,colnames(traitmatchF) %in% dath$Iplant_Double],2)
-traitmatchT<-traitmatchT[sort(rownames(traitmatchT)),sort(colnames(traitmatchT))]
-```
-
-```{r}
-##Elevation ranges
-
+##Elevation ranges for reference
 elevH<-read.csv("data/HummingbirdElevation.csv",row.names=1)
 colnames(elevH)[5]<-"Elevation"
 elevH$Bird<-1:nrow(elevH)
@@ -152,56 +87,14 @@ elevP$Iplant_Double<-as.character(elevP$Iplant_Double)
 
 #Merge to observed data
 #plants
-dathp<-merge(dath,elevP,by="Iplant_Double")
+dathp<-merge(fulldat,elevP,by="Iplant_Double")
 
 #birds
-datph<-merge(dathp,elevH,by="Hummingbird")
-```
-
-```{r}
-#What elevation transect is each observation in?
-#The camera data need to be inferred from the GPS point.
-
-#cut working best on data.frame
-datph<-as.data.frame(datph)
-
-#which elevation bin is each observation within
-labs<-paste(seq(1300,2500,200),seq(1500,2700,200),sep="_")
-
-#for the couple points that have 1290 elevation, round up to 300 for convienance
-datph$ele[datph$ele < 1300]<-1301
-datph$ele<-as.numeric(datph$ele)
-datph$Transect_R[is.na(datph$Transect_R)]<-as.character(cut(datph[is.na(datph$Transect_R),]$ele,seq(1300,2700,200),labels=labs))
-
-#Elev for the transects is the midpoint
-tran_elev<-datph[datph$Survey_Type=='Transect',"Transect_R"]
-datph[datph$Survey_Type=='Transect',"ele"]<-sapply(tran_elev,function(x){
-mean(as.numeric(str_split(x,"_")[[1]]))
-})
+datph<-merge(fulldat,elevH,by="Hummingbird")
 ```
 
 ```{r}
 ### Define Time Events
-#ID for NA is holger transects, make the id's 1:n for each day of transect at each elevation, assuming no elevation was split across days.
-datph$ID<-as.character(datph$ID)
-noid<-datph[is.na(datph$ID),]
-
-id_topaste<-paste(noid$Month,noid$Year,"Transect",sep="_")
-datph[which(is.na(datph$ID)),"ID"]<-id_topaste
-
-#Create year month combination
-datph$Time<-paste(datph$Month,datph$Year,sep="_")
-
-#Label survey type
-datph$Survey_Type<-NA
-
-mt<-!is.na(datph$TransectID)*1
-datph$Survey_Type[mt==1]<-"Transect"
-datph$Survey_Type[!datph$Survey_Type %in% "Transect"]<-"Camera"
-
-datph<-datph[datph$Survey_Type=="Camera",]
-
-#time filter
 
 #sort by timestamp
 datph<-datph[order(datph$timestamp),]
@@ -216,7 +109,7 @@ dotime<-function(d){
   return(d)
 }
 
-datph<-datph %>% group_by(ID,Hummingbird) %>% do(dotime(.))
+datph<-datph %>% group_by(ID,DateP,Hummingbird) %>% do(dotime(.))
 
 #eliminate interaction by the same species within five minutes
 datph<-datph[!1:nrow(datph) %in% which(datph$Timediff<5),]
@@ -230,32 +123,56 @@ x$Day<-as.numeric(as.factor(x$DateP))
 return(x)
 })
 
-indatraw<-rbind_all(sdat)
+indatraw<-bind_rows(sdat)
+```
 
-#Species names
-for (x in 1:nrow(indatraw)){
-  indatraw$Hummingbird[x]<-as.character(elevH[elevH$Bird %in% indatraw$Bird[x],"Hummingbird"])
-  indatraw$Iplant_Double[x]<-as.character(elevP[elevP$Plant %in% indatraw$Plant[x],"Iplant_Double"])
-}
+```{r}
 
 #match the traits
-traitmelt<-melt(traitmatchT)
+traitmelt<-melt(traitmatch)
 colnames(traitmelt)<-c("Hummingbird","Iplant_Double","Traitmatch")
 
 #dummy presence variable
 indatraw$Yobs<-1
-
-#prune columns to make more readable
-indatraw<-indatraw[,c("Hummingbird","Iplant_Double","ID","Time","Month","Year","Transect_R","ele","DateP","Yobs","Day","Survey_Type","Pierce")]
 ```
 
 ```{r}
 ##Summarize daily interactions
-indatraw<-indatraw %>% dplyr::group_by(Hummingbird,Iplant_Double,ID,Day,Time) %>% dplyr::summarize(Yobs=sum(Yobs),Transect_R=unique(Transect_R),Month=unique(Month),Year=unique(Year),ele=mean(ele),DateP=unique(DateP),Survey_Type=unique(Survey_Type)) %>% ungroup()
+datday<-indatraw %>%filter(!is.na(ele)) %>% mutate(interval=cut(timestamp,2)) %>% dplyr::group_by(Hummingbird,Iplant_Double,ID,Day,interval) %>% dplyr::summarize(Yobs=sum(Yobs),ele=mean(ele,na.rm=T),Date=min(format(timestamp,"%m/%d/%Y")))  %>% mutate(Yobs=(Yobs>0)*1) %>% mutate(site=factor(ele>1700)) %>% arrange(Date)
+
+levels(datday$site)<-c("Maquipucuna","Santa Lucia")
+
+rect <- data.frame(xmin=min(as.POSIXct(datday$Date,format="%m/%d/%Y")), xmax=as.POSIXct(unique(datday$interval)[2]), ymin=-Inf, ymax=Inf)
+
+timeplot<-datday %>% group_by(Date) %>% dplyr::summarize(n=sum(Yobs))
+
+ggplot(timeplot,aes(x=strptime(Date,"%m/%d/%Y"),y=as.integer(n))) + geom_line() + geom_rect(data=rect, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), fill="red",alpha=0.2,inherit.aes = FALSE) + theme_bw() + scale_x_datetime() + labs(x="Date",y="Observed Interactions") + scale_y_continuous(breaks=scales::pretty_breaks())
 ```
 
 ```{r}
-indat<-prepData(indatraw)
+#Assign site
+#Species list at each site
+species_list<-datday %>% group_by(site) %>% distinct(Hummingbird) %>% split(.,.$site)
+```
+
+#Absence data
+
+```{r}
+#For each observation, fill matrix with other species at the site
+
+fill_species<-function(x){
+  original<-x
+  to_fill<-species_list[[x$site]]$Hummingbird[!species_list[[x$site]]$Hummingbird %in% x$Hummingbird]
+  to_return<-list()
+  for(s in 1:length(to_fill)){
+    x$Hummingbird<-to_fill[s]
+    x$Yobs<-0
+    to_return[[s]]<-x
+  }
+  return(bind_rows(original,to_return))
+}
+
+indat<-datday %>% ungroup() %>% mutate(Index=1:nrow(.)) %>% group_by(Index) %>% do(fill_species(.)) %>% select(-Index)
 ```
 
 #Models
@@ -269,12 +186,8 @@ networks<-list()
 ## Random Baseline
 
 ```{r}
-#Cut into slices
-#Cut data into timeslices
-indat<-indat %>% arrange(DateP)
-indat$interval<-cut(as.POSIXct(indat$DateP),2)
+
 indat$jinterval<-as.numeric(indat$interval)
-intervals<-unique(indat$jinterval)
 
 #For species identity, there can't be any species interactions not in the prediction dataset.
 obs_levels<-indat %>% filter(jinterval==1) %>% distinct(Hummingbird,Iplant_Double) %>% mutate(i=paste(Hummingbird,Iplant_Double,sep="_")) %>% .$i
@@ -290,24 +203,26 @@ species_dat$Hummingbird<-as.factor(species_dat$Hummingbird)
 species_dat$Iplant_Double<-as.factor(species_dat$Iplant_Double)
 species_dat$jBird<-as.numeric(species_dat$Hummingbird)
 species_dat$jPlant<-as.numeric(species_dat$Iplant_Double)
+indat$jinterval<-as.numeric(indat$interval)
 
 jagsIndexBird<-data.frame(Hummingbird=levels(species_dat$Hummingbird),jBird=1:length(levels(species_dat$Hummingbird)))
 
 jagsIndexPlants<-data.frame(Iplant_Double=levels(species_dat$Iplant_Double),jPlant=1:length(levels(species_dat$Iplant_Double)))
 
 #Similiarly, the trait matrix needs to reflect this indexing.
-jTraitmatch<-traitmatchT[rownames(traitmatchT) %in% unique(species_dat$Hummingbird),colnames(traitmatchT) %in% unique(species_dat$Iplant_Double)]
+jTraitmatch<-traitmatch[rownames(traitmatch) %in% unique(species_dat$Hummingbird),colnames(traitmatch) %in% unique(species_dat$Iplant_Double)]
 
 species_dat$Index<-1:nrow(species_dat)
 species_dat<-droplevels(species_dat)
 
 #Turn Time and ID into numeric indexes
-species_dat$jTime<-as.numeric(as.factor(species_dat$Time))
+species_dat$jTime<-as.numeric(as.factor(species_dat$Date))
 species_dat$jID<-as.numeric(as.factor(species_dat$ID))
 
 #Split data
-Yobs_dat<-species_dat[species_dat$jinterval <= intervals[1],]
-Ynew_dat<-species_dat[species_dat$jinterval > intervals[1],]
+split_dat<-split(species_dat,species_dat$interval)
+Yobs_dat<-split_dat[[1]]
+Ynew_dat<-split_dat[[2]]
 ```
 
 $$ Yobs_{i,j} \sim Bernoulli(N(0,1.68)) $$
@@ -333,8 +248,8 @@ runModel<-function(Yobs_dat,Ynew_dat){
   ParsStage <- c("alpha","Ynew_pred","fit","fitnew","Enew")
   
   #Jags Data
-  Yobs<-(Yobs_dat$Yobs > 0)*1
-  Ynew<-(Ynew_dat$Yobs> 0)*1
+  Yobs<-Yobs_dat$Yobs
+  Ynew<-Ynew_dat$Yobs
   
   Dat<-list(
     Birds=max(Yobs_dat$jBird),
@@ -349,7 +264,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=3000,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=5000,n.burnin=4500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -407,10 +322,6 @@ chains$Random %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw,y=value
 
 ```{r}
 #Cut into slices
-#Cut data into timeslices
-indat<-indat %>% arrange(DateP)
-indat$interval<-cut(as.POSIXct(indat$DateP),2)
-indat$jinterval<-as.numeric(indat$interval)
 intervals<-unique(indat$jinterval)
 
 #For species identity, there can't be any species interactions not in the prediction dataset.
@@ -433,18 +344,19 @@ jagsIndexBird<-data.frame(Hummingbird=levels(species_dat$Hummingbird),jBird=1:le
 jagsIndexPlants<-data.frame(Iplant_Double=levels(species_dat$Iplant_Double),jPlant=1:length(levels(species_dat$Iplant_Double)))
 
 #Similiarly, the trait matrix needs to reflect this indexing.
-jTraitmatch<-traitmatchT[rownames(traitmatchT) %in% unique(species_dat$Hummingbird),colnames(traitmatchT) %in% unique(species_dat$Iplant_Double)]
+jTraitmatch<-traitmatch[rownames(traitmatch) %in% unique(species_dat$Hummingbird),colnames(traitmatch) %in% unique(species_dat$Iplant_Double)]
 
 species_dat$Index<-1:nrow(species_dat)
 species_dat<-droplevels(species_dat)
 
 #Turn Time and ID into numeric indexes
-species_dat$jTime<-as.numeric(as.factor(species_dat$Time))
+species_dat$jTime<-as.numeric(as.factor(species_dat$Date))
 species_dat$jID<-as.numeric(as.factor(species_dat$ID))
 
 #Split data
-Yobs_dat<-species_dat[species_dat$jinterval <= intervals[1],]
-Ynew_dat<-species_dat[species_dat$jinterval > intervals[1],]
+split_dat<-split(species_dat,species_dat$interval)
+Yobs_dat<-split_dat[[1]]
+Ynew_dat<-split_dat[[2]]
 ```
 
 $$ Yobs_{i,j} \sim Bernoulli(\lambda_{i,j}) $$
@@ -487,7 +399,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=4000,n.burnin=3000,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=5000,n.burnin=4500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -583,8 +495,8 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","Ynew_pred","fit","fitnew","Enew")
   
   #Jags Data
-  Yobs<-(Yobs_dat$Yobs > 0)*1
-  Ynew<-(Ynew_dat$Yobs> 0)*1
+  Yobs<-Yobs_dat$Yobs
+  Ynew<-Ynew_dat$Yobs
   
   Dat<-list(
     Yobs=Yobs,
@@ -600,7 +512,7 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=4000,n.burnin=3000,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=5000,n.burnin=4500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -754,28 +666,31 @@ Create a kind of venn diagram on PCA of model similarity based on per link discr
 ```{r}
 Enew<-allchains %>% filter(parameter == "Enew") %>% mutate(Index=as.numeric(as.character(Index)))
 
-Enew<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index")%>% dplyr::group_by(Model,Hummingbird,Iplant_Double) %>% dplyr::summarize(mean=mean(value,na.rm=T)) %>% mutate(pair=paste(Hummingbird,Iplant_Double,sep="_")) %>% ungroup() %>% dplyr::select(-Hummingbird,-Iplant_Double) %>% spread(pair,mean)
+worst<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index")%>% dplyr::group_by(Model,Hummingbird,Iplant_Double) %>% dplyr::summarize(mean=mean(-1*value,na.rm=T)) %>% mutate(pair=paste(Hummingbird,Iplant_Double,sep="_")) %>% ungroup() %>% dplyr::select(-Hummingbird,-Iplant_Double) %>% arrange(mean) %>% group_by(Model) %>% top_n(-3,mean) 
+worst
+
+Enew<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index")%>% dplyr::group_by(Model,Hummingbird,Iplant_Double) %>% dplyr::summarize(mean=mean(-1*value,na.rm=T)) %>% mutate(pair=paste(Hummingbird,Iplant_Double,sep="_")) %>% ungroup() %>% dplyr::select(-Hummingbird,-Iplant_Double) %>% spread(pair,mean)
 
 modmatrix<-t(Enew[,-1])
 colnames(modmatrix)<-Enew[,1]$Model
-prmodel<-prcomp(modmatrix)
-ggbiplot(prmodel)
+prmodel<-prcomp(modmatrix,scale=T)
 
+#get best differntial labels, those which exist in the edges of the space
+#loadings<-melt(prmodel$x) %>% spread(Var2,value) %>% group_by(Var2) %>% dplyr::summarize(min(value),max(value))
+
+ggbiplot(prmodel,alpha=0.2) + theme_bw()
+```
+
+```{r,eval=F}
 #ordination of model space
 Enew<-allchains %>% filter(parameter == "Enew") %>% mutate(Index=as.numeric(as.character(Index)))
 
-Enew<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index")%>% dplyr::group_by(Model,Hummingbird,Iplant_Double) %>% mutate(pair=paste(Hummingbird,Iplant_Double,sep="_")) %>% ungroup() %>% dplyr::select(-Hummingbird,-Iplant_Double) %>% select(Model,pair,value) spread(pair,value)
+Enew<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index")%>% dplyr::group_by(Model,Hummingbird,Iplant_Double) %>% mutate(pair=paste(Hummingbird,Iplant_Double,sep="_")) %>% ungroup() %>% dplyr::select(-Hummingbird,-Iplant_Double) %>% select(Model,pair,value) spread(pair,value) 
 
 modmatrix2<-as.matrix(Enew[,-1])
 rownames(modmatrix2)<-Enew[,1]$Model
 prmodel2<-prcomp(modmatrix2)
 ggbiplot(prmodel2)
-```
-
-```{r}
-# Which interactions were hardest to predict?
-
-#hardest<-allchains %>% group_by(Model) %>% mutate(Enew=abs(Yobs-value)) %>% group_by(jBird,jPlant) %>% arrange(desc(value)) %>% head(5)
 ```
 
 ```{r}
