@@ -50,7 +50,7 @@ fulldat<-read.csv("data/fulldat.csv",row.names=1)
 fulldat$timestamp<-as.POSIXct(fulldat$timestamp)
 
 #Testing
-fulldat<-fulldat %>% sample_n(100)
+#fulldat<-fulldat %>% sample_n(100)
 ```
 
 ```{r}
@@ -679,7 +679,7 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch_Detect.jags",n.thin=1,n.iter=2000,n.burnin=1900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch_Detect.jags",n.thin=1,n.iter=5000,n.burnin=4900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -800,7 +800,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=2000,n.burnin=1900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=4000,n.burnin=3900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -864,12 +864,12 @@ chains$Species_Detect_Elevation %>% filter(parameter == "fitnew")  %>% ggplot(.,
 ### Elevation ranges
 
 ```{r}
-elev_sim<-function(Model,jBird,alpha,beta,beta2,elevation){
+elev_sim<-function(jBird,alpha,beta,beta2,elevation){
   p<-inv.logit(alpha+beta*elevation+beta2*elevation^2)
-  data.frame(Model=Model,jBird=jBird,elevation=elevation,p=p)
+  data.frame(jBird=jBird,elevation=elevation,p=p)
 }
 
-bird_range <- chains$Species_Detect_Elevation %>% filter(parameter %in% c("alpha_occ","beta_occ","beta2_occ")) %>% select(-par) %>% spread(parameter,value) %>% group_by(Model,jBird,Draw,chain) %>% do(elev_sim(Model=.$Model,.$jBird,.$alpha_occ,.$beta_occ,.$beta2_occ,elevation=unique(Ynew_dat$ele))) %>% mutate(jBird=as.numeric(as.character(jBird))) %>% inner_join(jagsIndexBird) %>% group_by(Model,Hummingbird,elevation) %>% dplyr::summarise(mean=mean(p),lower=quantile(p,0.05),upper=quantile(p,0.95))
+bird_range <- chains$Species_Detect_Elevation %>% filter(parameter %in% c("alpha_occ","beta_occ","beta2_occ")) %>% select(-par) %>% spread(parameter,value) %>% group_by(jBird,Draw,chain) %>% do(elev_sim(.$jBird,.$alpha_occ,.$beta_occ,.$beta2_occ,elevation=unique(Ynew_dat$ele))) %>% mutate(jBird=as.numeric(as.character(jBird))) %>% inner_join(jagsIndexBird) %>% group_by(Hummingbird,elevation) %>% dplyr::summarise(mean=mean(p),lower=quantile(p,0.05),upper=quantile(p,0.95))
  
 ggplot(bird_range,aes(x=elevation))  + geom_line(aes(y=mean)) + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2) + facet_wrap(~Hummingbird) + labs(x="Elevation",y="Probability of Occurrence")
 ```
