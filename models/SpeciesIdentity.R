@@ -9,7 +9,7 @@ cat("
     Yobs[x] ~ dbern(s[x])
     
     #Observed discrepancy
-    E[x]<-abs(Yobs[x]- s[x])/Nobs
+    E[x]<-abs(Yobs[x]- s[x])
     }
     
     #Assess Model Fit - Predict remaining data
@@ -20,7 +20,7 @@ cat("
       Ynew_pred[x]~dbern(snew[x])
     
       #Assess fit, proportion of corrected predicted observations
-      Enew[x]<-abs(Ynew[x]-Ynew_pred[x])/Nnewdata
+      Enew[x]<-abs(Ynew[x]-Ynew_pred[x])
 
     }
     

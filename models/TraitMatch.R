@@ -28,7 +28,7 @@ cat("
     Ynew_pred[x]~dbern(pnew[x])
     
     #Assess fit, proportion of corrected predicted links
-    Enew[x]<-abs(Ynew[x]-Ynew_pred[x])/Nnewdata
+    Enew[x]<-abs(Ynew[x]-Ynew_pred[x])
     
     }
     

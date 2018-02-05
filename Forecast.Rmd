@@ -50,7 +50,6 @@ fulldat<-read.csv("data/fulldat.csv",row.names=1)
 fulldat$timestamp<-as.POSIXct(fulldat$timestamp)
 ```
 
-
 ```{r}
 #read in flower morphology data, comes from Nectar.R
 fl.morph<-read.csv("data/FlowerMorphology.csv")
@@ -136,7 +135,7 @@ colnames(traitmelt)<-c("Hummingbird","Iplant_Double","Traitmatch")
 indatraw$Yobs<-1
 ```
 
-```{r}
+```{r,fig.height=4,fig.width=8}
 ##Summarize daily interactions
 datday<-indatraw %>%filter(!is.na(ele)) %>% mutate(interval=cut(timestamp,2)) %>% dplyr::group_by(Hummingbird,Iplant_Double,ID,Day,interval) %>% dplyr::summarize(Yobs=sum(Yobs),ele=mean(ele,na.rm=T),Date=min(format(timestamp,"%m/%d/%Y")))  %>% mutate(Yobs=(Yobs>0)*1) %>% mutate(site=factor(ele>1700)) %>% arrange(Date)
 
@@ -152,7 +151,7 @@ ggplot(timeplot,aes(x=strptime(Date,"%m/%d/%Y"),y=as.integer(n))) + geom_line() 
 ```{r}
 #Assign site
 #Species list at each site
-species_list<-datday %>% group_by(site) %>% distinct(Hummingbird) %>% split(.,.$site)
+species_list<-datday %>% group_by(site) %>% distinct(Hummingbird)
 ```
 
 #Absence data
@@ -162,7 +161,8 @@ species_list<-datday %>% group_by(site) %>% distinct(Hummingbird) %>% split(.,.$
 
 fill_species<-function(x){
   original<-x
-  to_fill<-species_list[[x$site]]$Hummingbird[!species_list[[x$site]]$Hummingbird %in% x$Hummingbird]
+  to_fill<-species_list$Hummingbird[!species_list$Hummingbird %in% x$Hummingbird]
+
   to_return<-list()
   for(s in 1:length(to_fill)){
     x$Hummingbird<-to_fill[s]
@@ -227,6 +227,8 @@ Ynew_dat<-split_dat[[2]]
 
 $$ Yobs_{i,j} \sim Bernoulli(N(0,1.68)) $$
 
+Note that this is a random probability of interaction on a per observation basis. This is different than a random link model. If we are interested in a binary network, a random interaction probability model will lead to a link probability of 1-(1/2)^n in n sampling events.
+
 ```{r}
 #Source model
 source("models/SpeciesIdentity.R")
@@ -264,7 +266,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=5000,n.burnin=4500,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=1000,n.burnin=500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -399,7 +401,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=5000,n.burnin=4500,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=1000,n.burnin=500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -512,7 +514,7 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=5000,n.burnin=4500,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=1000,n.burnin=500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -569,9 +571,21 @@ ggplot(chains$Traits[chains$Traits$par %in% c("beta1_mu","beta1_sigma","alpha_mu
 
 Using the counts from the transects. Abundance is especially important to model, since its fluctuating all the time.
 
-# Model Comparison
+Do we have time for this?
+
+# Incorportating geography
+
+If species co-occurrence is a prerequisite for interaction, then the absence of interactions may stem either from a lack of detectability or species absence. We can jointly model the presence of species as a function of elevation and then existance of an interaction.
 
 ```{r}
+
+
+```
+
+
+# Model Comparison
+
+```{r,fig.height=4,fig.width=8}
 #A bit ugly, but let's assign names.
 for(x in 1:length(chains)){
     chains[[x]]<-chains[[x]] %>% mutate(Model=names(chains)[x])
@@ -579,7 +593,15 @@ for(x in 1:length(chains)){
 
 allchains<-bind_rows(lapply(chains,bind_rows))
 
-ggplot(allchains[allchains$parameter %in% c("fitnew"),],aes(x=1-value)) + geom_density(aes(fill=Model),alpha=0.5) + theme_bw() + labs(x="Proportion of correctly predicted observations") + scale_x_continuous(labels=scales::percent)
+Ynew_dat$Index<-1:nrow(Ynew_dat)
+
+fitnew<-allchains %>% filter(parameter=="Enew") %>% mutate(Index=as.numeric(Index)) %>% select(Model,Draw,chain,Index,value) %>% inner_join(Ynew_dat,by="Index") %>% group_by(Model,Draw,chain,Yobs) %>% dplyr::summarize(p=sum(value)/n())
+
+fitnew$Yobs<-factor(fitnew$Yobs)
+levels(fitnew$Yobs)<-c("Absences","Presences")
+
+ggplot(fitnew,aes(x=1-p)) + geom_density(aes(fill=Model),alpha=0.5) + theme_bw() + labs(x="Proportion of correctly predicted observations") + scale_x_continuous(labels=scales::percent) + facet_wrap(~Yobs,scales="free")  
+
 #ggsave("Figures/PredLinksBoth.svg")
 #ggsave("Figures/PredLinksBoth.jpeg",height=3,width=7)
 ```
@@ -588,7 +610,7 @@ ggplot(allchains[allchains$parameter %in% c("fitnew"),],aes(x=1-value)) + geom_d
 
 Dashed line is the observed network from the time-series.
 
-```{r}
+```{r,fig.height=6,fig.width=10}
 #Get network statistics for all models.
 allnetworks<-lapply(networks,function(x){
     lapply(x,function(y){
@@ -596,6 +618,9 @@ allnetworks<-lapply(networks,function(x){
       return(data.frame(Metric=names(d),value=d))
     })
   })
+
+netdf<-melt(networks)
+netdf %>% group_by(L1,value,L2) %>% dplyr::summarize(n=n()) %>% group_by(L1,value) %>% dplyr::summarize(n=mean(n))
 
 allnetworks<-melt(allnetworks,id.var=c("Metric","value"))
 
@@ -610,7 +635,7 @@ obs_net<-melt(data.frame(Metric=names(obs_net),value=obs_net))
 
 #Plot
 allnetworks<-allnetworks %>% select(Model=L1,Metric,value)
-ggplot(allnetworks,aes(x=value)) + geom_density(aes(fill=Model),alpha=0.5) + facet_wrap(~Metric) + geom_vline(data=obs_net,aes(xintercept=value),linetype="dashed")
+ggplot(allnetworks,aes(x=value)) + geom_density(aes(fill=Model),alpha=0.5) + facet_wrap(~Metric) + geom_vline(data=obs_net,aes(xintercept=value),linetype="dashed") + theme_bw()
 ```
 
 # Predicted betadiversity
@@ -631,7 +656,7 @@ m_new<-m_new > 0 * 1
 obs_dis<-betalink(graph.incidence(m_obs),graph.incidence(m_new))
 ```
 
-```{r}
+```{r,fig.height=4,fig.width=10}
 betastat<-lapply(networks,function(x){
   lapply(x,function(y){
     obs_dis<-betalink(graph.incidence(m_obs),graph.incidence(y))
