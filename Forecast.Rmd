@@ -3,7 +3,7 @@ title: "Dynamic models of interaction betadiversity"
 output:
 html_document:
   toc: true
-  number_sections: true
+  numbered_sections: true
   theme: spacelab
   keep_md: true
 editor_options: 
@@ -120,9 +120,9 @@ datph<-datph[!1:nrow(datph) %in% which(datph$Timediff<5),]
 sdat<-split(datph,list(datph$ID),drop = T)
 
 sdat<-lapply(sdat,function(x){
-x<-droplevels(x)
-x$Day<-as.numeric(as.factor(x$DateP))
-return(x)
+  x<-droplevels(x)
+  x$Day<-as.numeric(as.factor(x$DateP))
+  return(x)
 })
 
 indatraw<-bind_rows(sdat)
@@ -259,7 +259,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=20000,n.burnin=19900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=1000,n.burnin=900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -355,7 +355,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=20000,n.burnin=19900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=1000,n.burnin=900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -410,109 +410,8 @@ networks$Species<-getPredictions(chains$Species,Ynew_dat = Ynew_dat)
 chains$Species %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~parameter)
 ```
 
-## Trait-matching
+# Detectability + Species Identity
 
-For hummingbird species i feeding on plant species j observed at time k and sampling event observed by transect 
-
-Process Model:
-
-$$ N_{i,j,k} \sim Binomial(\lambda_{i,j,k}) $$
-$$ logit(\lambda_{i,j,k}) = \alpha_i + \beta_{1,i} * Traitmatch_{i,j} $$
-
-```{r}
-#Source model
-source("models/TraitMatch.R")
-
-#print model
-writeLines(readLines("models/TraitMatch.R"))
-
-runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
-  
-  #Inits
-  InitStage <- function(){
-    #A blank Y matrix - all present
-    Ynew_pred<-rep(1,Dat$Nnewdata)
-    list(Ynew_pred=Ynew_pred)}
-  
-  #Parameters to track
-  ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","Ynew_pred","fit","fitnew","Enew")
-  
-  #Jags Data
-  Yobs<-Yobs_dat$Yobs
-  Ynew<-Ynew_dat$Yobs
-  
-  Dat<-list(
-    Yobs=Yobs,
-    Birds=max(c(Yobs_dat$jBird,Ynew_dat$jPlant)),
-    Bird=Yobs_dat$jBird,
-    Plant=Yobs_dat$jPlant,
-    Nobs=length(Yobs),
-    NewBird=Ynew_dat$jBird,
-    NewPlant=Ynew_dat$jPlant,
-    Ynew=Ynew,
-    Nnewdata=length(Ynew),
-    Traitmatch=jTraitmatch)
-  
-  #MCMC options
-    system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=20000,n.burnin=19900,n.chains=2,DIC=F)
-    )
-    return(m2)
-}
-
-#Run Model
-models$Traits<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat,jTraitmatch=jTraitmatch)
-```
-
-```{r}
-getChains<-function(x,Bird="Bird",Plant="Plant"){
-  #extract desired info from the models
-  #bind chains
-  pc_dive<-reshape2::melt(x$BUGSoutput$sims.array)
-  colnames(pc_dive)<-c("Draw","chain","par","value")
-  
-  #extract parameter name
-  pc_dive$parameter<-data.frame(str_match(pc_dive$par,"(\\w+)"))[,-1]
-  
-  #Extract index
-  splitpc<-split(pc_dive,pc_dive$parameter)
-  
-  #single index
-  splitpc[c("alpha","beta1","Ynew_pred","Enew")]<-lapply(splitpc[c("alpha","beta1","Ynew_pred","Enew")],function(x){
-    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
-    pc<-data.frame(x,Index=sv)
-    return(pc)
-  }) 
-  
-  #bind all matrices back together
-  pc_dive<-bind_rows(splitpc)
-}
-```
-
-```{r}
-#Get Chains
-chains$Traits<-getChains(models$Traits,Bird="jBird",Plant="jPlant")
-
-#Get networks
-networks$Traits<-getPredictions(chains$Traits,Ynew_dat = Ynew_dat)
-```
-
-###Assess Convergence
-
-```{r,cache=FALSE,fig.width=8,fig.height=3}
-###Chains
-ggplot(chains$Traits[chains$Traits$parameter %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + facet_wrap(~parameter,scale="free") + theme_bw() + labs(col="Chain") 
-```
-
-```{r,fig.height=3,fig.width=8}
-ggplot(chains$Traits[chains$Traits$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
-```
-
-# Detectability
-
-To Do. Should I also do traits without the detection probabilities?
-
-## Species Identity
 Observation Model:
 
 $$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega_i) $$
@@ -566,7 +465,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=40000,n.burnin=39900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=1000,n.burnin=900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -619,119 +518,6 @@ networks$Species_Detect<-getPredictions(chains$Species_Detect,Ynew_dat = Ynew_da
 ###Chains
 chains$Species_Detect %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~parameter)
 ```
-
-## Trait-matching
-
-For hummingbird species i feeding on plant species j observed at time k and sampling event observed by transect 
-
-Observation Model:
-
-$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega_i) $$
-
-Process Model:
-
-$$ N_{i,j,k} \sim Binomial(\lambda_{i,j,k}) $$
-$$ logit(\lambda_{i,j,k}) = \alpha_i + \beta_{1,i} * Traitmatch_{i,j} $$
-
-```{r}
-#Source model
-source("models/TraitMatch_Detect.R")
-
-#print model
-writeLines(readLines("models/TraitMatch_Detect.R"))
-
-runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
-  
-  #Inits
-  InitStage <- function(){
-    #A blank Y matrix - all present
-    initY<-rep(1,Dat$Nobs)
-    initB<-rep(0.5,Dat$Birds)
-    Ynew_pred<-rep(1,Dat$Nnewdata)
-    z<-rep(1,Dat$Nobs)
-    znew<-rep(1,Dat$Nnewdata)
-    
-    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred)}
-  
-  #Parameters to track
-  ParsStage <- c("alpha","beta1","alpha_mu","alpha_sigma","beta1_sigma","beta1_mu","detect","Ynew_pred","fit","fitnew","Enew")
-  
-  #Jags Data
-  Yobs<-Yobs_dat$Yobs
-  Ynew<-Ynew_dat$Yobs
-  
-  Dat<-list(
-    Yobs=Yobs,
-    Birds=max(c(Yobs_dat$jBird,Ynew_dat$jPlant)),
-    Bird=Yobs_dat$jBird,
-    Plant=Yobs_dat$jPlant,
-    Nobs=length(Yobs),
-    NewBird=Ynew_dat$jBird,
-    NewPlant=Ynew_dat$jPlant,
-    Ynew=Ynew,
-    Nnewdata=length(Ynew),
-    Traitmatch=jTraitmatch)
-  
-  #MCMC options
-    system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch_Detect.jags",n.thin=1,n.iter=40000,n.burnin=39900,n.chains=2,DIC=F)
-    )
-    return(m2)
-}
-
-#Run Model
-models$Traits_Detect<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat,jTraitmatch=jTraitmatch)
-```
-
-```{r}
-getChains<-function(x,Bird="Bird",Plant="Plant"){
-  #extract desired info from the models
-  #bind chains
-  pc_dive<-reshape2::melt(x$BUGSoutput$sims.array)
-  colnames(pc_dive)<-c("Draw","chain","par","value")
-  
-  #extract parameter name
-  pc_dive$parameter<-data.frame(str_match(pc_dive$par,"(\\w+)"))[,-1]
-  
-  #Extract index
-  splitpc<-split(pc_dive,pc_dive$parameter)
-  
-  #single index
-  splitpc[c("alpha","beta1","detect","Ynew_pred","Enew")]<-lapply(splitpc[c("alpha","beta1","detect","Ynew_pred","Enew")],function(x){
-    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
-    pc<-data.frame(x,Index=sv)
-    return(pc)
-  }) 
-  
-  #bind all matrices back together
-  pc_dive<-bind_rows(splitpc)
-}
-```
-
-```{r}
-#Get Chains
-chains$Traits_Detect<-getChains(models$Traits_Detect,Bird="jBird",Plant="jPlant")
-
-#Get networks
-networks$Traits_Detect<-getPredictions(chains$Traits_Detect,Ynew_dat = Ynew_dat)
-```
-
-###Assess Convergence
-
-```{r,cache=FALSE,fig.width=8,fig.height=3}
-###Chains
-ggplot(chains$Traits_Detect[chains$Traits_Detect$parameter %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + facet_wrap(~parameter,scale="free") + theme_bw() + labs(col="Chain") 
-```
-
-```{r,fig.height=3,fig.width=8}
-ggplot(chains$Traits_Detect[chains$Traits_Detect$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
-```
-
-## Abundance 
-
-Using the counts from the transects. Abundance is especially important to model, since its fluctuating all the time.
-
-Do we have time for this?
 
 # Incorportating species occurrence 
 
@@ -795,7 +581,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=50000,n.burnin=49900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=1000,n.burnin=900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -871,6 +657,8 @@ ggplot(bird_range,aes(x=elevation))  + geom_line(aes(y=mean)) + geom_ribbon(aes(
 
 # Model Comparison
 
+## Proportion of predicted observations
+
 ```{r,fig.height=7,fig.width=8}
 #A bit ugly, but let's assign names.
 for(x in 1:length(chains)){
@@ -878,8 +666,6 @@ for(x in 1:length(chains)){
   }
 
 allchains<-bind_rows(lapply(chains,bind_rows))
-
-Ynew_dat$Index<-1:nrow(Ynew_dat)
 
 fitnew<-allchains %>% filter(parameter=="Enew")  %>% mutate(Level=str_extract(Model,"_(\\w+)")) %>% group_by(Model) %>% mutate(Index=as.numeric(Index)) %>% select(Model,Level,Draw,chain,Index,value) %>% inner_join(Ynew_dat,by="Index") %>% separate(Model,sep="_",c("Model","Detect","Elevation")) %>% select(-Detect,-Elevation)  %>% group_by(Model,Level,Draw,chain,Yobs) %>% dplyr::summarize(p=sum(value)/n())
 
@@ -891,6 +677,36 @@ fitnew$Yobs<-factor(fitnew$Yobs)
 levels(fitnew$Yobs)<-c("Absences","Presences")
 
 ggplot(fitnew,aes(x=1-p,fill=Model)) + theme_bw() + labs(x="Proportion of correctly predicted observations") + scale_x_continuous(labels=scales::percent) + facet_grid(Level~Yobs,scales="free")  + geom_density(alpha=0.3) 
+```
+
+## Proportion of predicted links
+
+```{r}
+m_new<-acast(Ynew_dat,Hummingbird~Iplant_Double,value.var="Yobs",fun.aggregate = sum)
+m_new<-(m_new > 0) * 1
+
+#Network statistics
+obs_net<-networklevel(m_new,index=c("connectance","niche overlap"),level="lower")
+obs_net<-melt(data.frame(Metric=names(obs_net),value=obs_net))
+
+#Also grab a melted version to match posterior format
+obs_matrix<-melt(m_new) %>% select(Hummingbird=Var1,Iplant_Double=Var2,value) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_"))
+```
+
+```{r,fig.height=4,fig.width=7}
+netdf<-melt(networks)
+
+true_positives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Model,Link,Iteration) %>% dplyr::summarize(value=max(value)) %>% filter(value==1) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==1]) %>% group_by(Model,Iteration) %>% dplyr::summarize(n=n()) %>% dplyr::summarize(mean=mean(n),lower=quantile(n,0.05),upper=quantile(n,0.95))
+
+true_negatives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Model,Link,Iteration) %>% dplyr::summarize(value=max(value)) %>% filter(value==0) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==0]) %>% group_by(Model,Iteration) %>% dplyr::summarize(n=n()) %>% dplyr::summarize(mean=mean(n),lower=quantile(n,0.05),upper=quantile(n,0.95))
+
+false_positives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Model,Link,Iteration) %>% dplyr::summarize(value=max(value)) %>% filter(value==1) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==0]) %>% group_by(Model,Iteration) %>% dplyr::summarize(n=n()) %>% dplyr::summarize(mean=mean(n),lower=quantile(n,0.05),upper=quantile(n,0.95))
+
+false_negatives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Model,Link,Iteration) %>% dplyr::summarize(value=max(value)) %>% filter(value==0) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==1]) %>% group_by(Model,Iteration) %>% dplyr::summarize(n=n()) %>% dplyr::summarize(mean=mean(n),lower=quantile(n,0.05),upper=quantile(n,0.95))
+
+conf_matrix<-melt(list(true_positives=true_positives,true_negatives=true_negatives,false_positives=false_positives,false_negatives=false_negatives)) %>% select(Model,variable,value,Metric=L1) %>% spread(Metric,value) %>% mutate(recall=true_positives/(true_positives+false_negatives),precision=true_positives/(true_positives+false_positives)) %>% select(Model,stat=variable,recall,precision) %>% melt(id.vars=c("Model","stat")) %>% dcast(Model+variable~stat)
+
+ggplot(conf_matrix,aes(x=Model)) + facet_wrap(~variable,scales="free") + geom_linerange(aes(ymin=lower,ymax=upper)) + geom_point(aes(y=mean)) + coord_flip()
 
 #ggsave("Figures/PredLinksBoth.svg")
 #ggsave("Figures/PredLinksBoth.jpeg",height=3,width=7)
@@ -902,10 +718,6 @@ Dashed line is the observed network from the time-series.
 
 ```{r,fig.height=7,fig.width=10}
 
-#How many presences?
-netdf<-melt(networks)
-netdf %>% group_by(L1,value,L2) %>% dplyr::summarize(n=n()) %>% group_by(L1,value) %>% dplyr::summarize(n=mean(n))
-
 #Get network statistics for all models.
 allnetworks<-lapply(networks,function(x){
     lapply(x,function(y){
@@ -915,11 +727,6 @@ allnetworks<-lapply(networks,function(x){
   })
 allnetworks<-melt(allnetworks,id.var=c("Metric","value"))
 
-#Observed binary network
-m_new<-acast(Ynew_dat,Hummingbird~Iplant_Double,value.var="Yobs",fun.aggregate = sum)
-m_new<-m_new > 0 * 1
-obs_net<-networklevel(m_new,index=c("connectance","niche overlap"),level="lower")
-obs_net<-melt(data.frame(Metric=names(obs_net),value=obs_net))
 
 #Plot
 allnetworks<-allnetworks %>% select(Model=L1,Metric,value) %>% mutate(Level=str_extract(Model,"_(\\w+)"))%>% separate(Model,sep="_",c("Model","Detect","Elevation")) %>% select(-Detect,-Elevation) 
@@ -935,6 +742,7 @@ ggplot(allnetworks,aes(x=value)) + geom_density(aes(fill=Model),alpha=0.5) + fac
 
 Dissimilairty in interactions (Beta_WN from Poisot 2012)
 Dashed line is the observed network from the time-series.
+Note that this is really a measure of dissimilairty in one level (hummimngbirds), as the dissimilarity in plants is fixed by the sampling protocol. While there be a correlation between the species pool and the chosen plant to film, this is filtered by a human placing a camera at that plant, and as such isn't a true measure of plant dissimiality.
 
 ```{r}
 #Observed dissimalarity
@@ -985,21 +793,29 @@ levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "S"]<-"Specie
 ggplot(betastat %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value,fill=Model)) + geom_density(alpha=0.4) + facet_grid(Level~Betadiversity,scales="free") + geom_vline(data=mobs_dis  %>% filter(!Betadiversity %in% "Species Turnover"),aes(xintercept=value),linetype="dashed") + theme_bw()
 ```
 
+# Mechanistic  Models
+
 # Model overlap
 
 Create a kind of venn diagram on PCA of model similarity based on per link discrepency. 
 
 ```{r}
 Enew<-allchains %>% filter(parameter == "Enew") %>% mutate(Index=as.numeric(as.character(Index)))
-
 worst<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index")%>% dplyr::group_by(Model,Hummingbird,Iplant_Double) %>% dplyr::summarize(mean=mean(-1*value,na.rm=T)) %>% mutate(pair=paste(Hummingbird,Iplant_Double,sep="_")) %>% ungroup() %>% dplyr::select(-Hummingbird,-Iplant_Double) %>% arrange(mean) %>% group_by(Model) %>% top_n(-4,mean) 
 
 worst
 
 Enew<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index")%>% dplyr::group_by(Model,Hummingbird,Iplant_Double) %>% dplyr::summarize(mean=mean(-1*value,na.rm=T)) %>% mutate(pair=paste(Hummingbird,Iplant_Double,sep="_")) %>% ungroup() %>% dplyr::select(-Hummingbird,-Iplant_Double) %>% spread(pair,mean) 
+```
 
-modmatrix<-t(Enew[,-1])
-colnames(modmatrix)<-Enew[,1]$Model
+```{r}
+#Proportion of predicted networks containing correct prediction per link
+proplinks<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% filter(value==1) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==1]) %>% group_by(Model,Link) %>% dplyr::summarize(n=n()/max(as.numeric(netdf$L2))*100) 
+
+#NA's are 0
+spread_link<-as.data.frame(spread(proplinks,Link,n,fill=0))
+modmatrix<-t(spread_link[,-1])
+colnames(modmatrix)<-spread_link$Model
 prmodel<-prcomp(modmatrix,scale=T)
 
 #get best differntial labels, those which exist in the edges of the space
@@ -1011,13 +827,7 @@ ggbiplot(prmodel,alpha=0.2,varname.size = 4) + theme_bw()
 Without random model
 
 ```{r}
-Enew<-allchains %>% filter(parameter == "Enew") %>% mutate(Index=as.numeric(as.character(Index)))
-
-Enew<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index")%>% dplyr::group_by(Model,Hummingbird,Iplant_Double) %>% dplyr::summarize(mean=mean(-1*value,na.rm=T)) %>% mutate(pair=paste(Hummingbird,Iplant_Double,sep="_")) %>% ungroup() %>% dplyr::select(-Hummingbird,-Iplant_Double) %>% spread(pair,mean) %>% filter(!Model %in% c("Random"))
-
-modmatrix<-t(Enew[,-1])
-colnames(modmatrix)<-Enew[,1]$Model
-prmodel<-prcomp(modmatrix,scale=T)
+prmodel<-prcomp(modmatrix[,-1],scale=T)
 
 ggbiplot(prmodel,alpha=0.2,varname.size = 4) + theme_bw() 
 ```
