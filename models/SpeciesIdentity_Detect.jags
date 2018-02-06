@@ -36,7 +36,6 @@
     #Priors
     #Observation model
     #Detect priors, logit transformed - Following lunn 2012 p85
-    
     for(x in 1:Birds){
       logit(detect[x])<-dcam[x]
       dcam[x]~dnorm(omega_mu,omega_tau)

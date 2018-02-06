@@ -259,7 +259,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=2000,n.burnin=1900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=20000,n.burnin=19900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -355,7 +355,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=2000,n.burnin=1900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=20000,n.burnin=19900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -414,10 +414,6 @@ chains$Species %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw,y=valu
 
 For hummingbird species i feeding on plant species j observed at time k and sampling event observed by transect 
 
-Observation Model:
-
-$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega) $$
-
 Process Model:
 
 $$ N_{i,j,k} \sim Binomial(\lambda_{i,j,k}) $$
@@ -459,7 +455,7 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=2000,n.burnin=1900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch.jags",n.thin=1,n.iter=20000,n.burnin=19900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -503,12 +499,12 @@ networks$Traits<-getPredictions(chains$Traits,Ynew_dat = Ynew_dat)
 
 ###Assess Convergence
 
-```{r,cache=FALSE,fig.width=13,fig.height=5}
+```{r,cache=FALSE,fig.width=8,fig.height=3}
 ###Chains
 ggplot(chains$Traits[chains$Traits$parameter %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + facet_wrap(~parameter,scale="free") + theme_bw() + labs(col="Chain") 
 ```
 
-```{r,fig.height=5,fig.width=11}
+```{r,fig.height=3,fig.width=8}
 ggplot(chains$Traits[chains$Traits$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
 ```
 
@@ -519,7 +515,7 @@ To Do. Should I also do traits without the detection probabilities?
 ## Species Identity
 Observation Model:
 
-$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega) $$
+$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega_i) $$
 
 Process Model:
 
@@ -570,7 +566,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=2000,n.burnin=1900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=40000,n.burnin=39900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -610,7 +606,6 @@ return(chains)}
 ```
 
 ```{r}
-
 ##Generate chains
 chains$Species_Detect<-getChains(models$Species_Detect)
 
@@ -631,7 +626,7 @@ For hummingbird species i feeding on plant species j observed at time k and samp
 
 Observation Model:
 
-$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega) $$
+$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega_i) $$
 
 Process Model:
 
@@ -679,7 +674,7 @@ runModel<-function(Yobs_dat,Ynew_dat,jTraitmatch){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch_Detect.jags",n.thin=1,n.iter=5000,n.burnin=4900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/TraitMatch_Detect.jags",n.thin=1,n.iter=40000,n.burnin=39900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -723,12 +718,12 @@ networks$Traits_Detect<-getPredictions(chains$Traits_Detect,Ynew_dat = Ynew_dat)
 
 ###Assess Convergence
 
-```{r,cache=FALSE,fig.width=13,fig.height=5}
+```{r,cache=FALSE,fig.width=8,fig.height=3}
 ###Chains
 ggplot(chains$Traits_Detect[chains$Traits_Detect$parameter %in% c("alpha_mu","beta1_mu"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + facet_wrap(~parameter,scale="free") + theme_bw() + labs(col="Chain") 
 ```
 
-```{r,fig.height=5,fig.width=11}
+```{r,fig.height=3,fig.width=8}
 ggplot(chains$Traits_Detect[chains$Traits_Detect$par %in% c("beta1_mu","beta1_sigma","alpha_mu","alpha_sigma"),],aes(x=Draw,y=value,col=as.factor(chain))) + geom_line() + theme_bw() + labs(col="Chain") + ggtitle("Group Level Parameters") + facet_wrap(~par,scales="free")
 ```
 
@@ -745,7 +740,7 @@ If species co-occurrence is a prerequisite for interaction, then the absence of 
 ## Species Identity
 Observation Model:
 
-$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega) $$
+$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega_i) $$
 
 Process Model:
 
@@ -800,7 +795,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=4000,n.burnin=3900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=50000,n.burnin=49900,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -953,7 +948,7 @@ m_new<-m_new > 0 * 1
 obs_dis<-betalink(graph.incidence(m_obs),graph.incidence(m_new))
 ```
 
-```{r,fig.height=8,fig.width=10}
+```{r,fig.height=7,fig.width=9}
 betastat<-lapply(networks,function(x){
   lapply(x,function(y){
     obs_dis<-betalink(graph.incidence(m_obs),graph.incidence(y))
@@ -987,7 +982,7 @@ levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "ST"]<-"Inter
 levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "OS"]<-"Interaction Rewiring"
 levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "S"]<-"Species Turnover"
 
-ggplot(betastat %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value,fill=Model)) + geom_density() + facet_grid(Level~Betadiversity,scales="free") + geom_vline(data=mobs_dis  %>% filter(!Betadiversity %in% "Species Turnover"),aes(xintercept=value),linetype="dashed")
+ggplot(betastat %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value,fill=Model)) + geom_density(alpha=0.4) + facet_grid(Level~Betadiversity,scales="free") + geom_vline(data=mobs_dis  %>% filter(!Betadiversity %in% "Species Turnover"),aes(xintercept=value),linetype="dashed") + theme_bw()
 ```
 
 # Model overlap
@@ -1009,6 +1004,20 @@ prmodel<-prcomp(modmatrix,scale=T)
 
 #get best differntial labels, those which exist in the edges of the space
 #loadings<-melt(prmodel$x) %>% spread(Var2,value) %>% group_by(Var2) %>% dplyr::summarize(min(value),max(value))
+
+ggbiplot(prmodel,alpha=0.2,varname.size = 4) + theme_bw() 
+```
+
+Without random model
+
+```{r}
+Enew<-allchains %>% filter(parameter == "Enew") %>% mutate(Index=as.numeric(as.character(Index)))
+
+Enew<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(Enew,by="Index")%>% dplyr::group_by(Model,Hummingbird,Iplant_Double) %>% dplyr::summarize(mean=mean(-1*value,na.rm=T)) %>% mutate(pair=paste(Hummingbird,Iplant_Double,sep="_")) %>% ungroup() %>% dplyr::select(-Hummingbird,-Iplant_Double) %>% spread(pair,mean) %>% filter(!Model %in% c("Random"))
+
+modmatrix<-t(Enew[,-1])
+colnames(modmatrix)<-Enew[,1]$Model
+prmodel<-prcomp(modmatrix,scale=T)
 
 ggbiplot(prmodel,alpha=0.2,varname.size = 4) + theme_bw() 
 ```
