@@ -50,7 +50,7 @@ fulldat<-read.csv("data/fulldat.csv",row.names=1)
 fulldat$timestamp<-as.POSIXct(fulldat$timestamp)
 
 #Testing
-fulldat<-fulldat %>% sample_n(100)
+#fulldat<-fulldat %>% sample_n(100)
 ```
 
 ```{r}
@@ -259,7 +259,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=5000,n.burnin=4800,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -355,7 +355,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=5000,n.burnin=4800,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -457,7 +457,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -574,7 +574,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -832,7 +832,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -977,7 +977,7 @@ colnames(modmatrix)<-spread_link$Model
 prmodel<-prcomp(modmatrix,scale=T)
 
 ggbiplot(prmodel,alpha=0.2,varname.size = 4) + theme_bw() 
-```
+``` 
 
 Without random model
 
