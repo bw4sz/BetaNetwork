@@ -50,7 +50,7 @@ fulldat<-read.csv("data/fulldat.csv",row.names=1)
 fulldat$timestamp<-as.POSIXct(fulldat$timestamp)
 
 #Testing
-fulldat<-fulldat %>% sample_n(100)
+#fulldat<-fulldat %>% sample_n(100)
 ```
 
 ```{r}
@@ -140,11 +140,11 @@ indatraw$Yobs<-1
 
 ```{r,fig.height=4,fig.width=8}
 ##Summarize daily interactions
-datday<-indatraw %>%filter(!is.na(ele)) %>% mutate(interval=cut(timestamp,2)) %>% dplyr::group_by(Hummingbird,Iplant_Double,ID,Day,interval) %>% dplyr::summarize(Yobs=sum(Yobs),ele=mean(ele,na.rm=T),Date=min(format(timestamp,"%m/%d/%Y")))  %>% mutate(Yobs=(Yobs>0)*1) %>% mutate(site=factor(ele>1700)) %>% arrange(Date)
+datday<-indatraw %>%filter(!is.na(ele)) %>% mutate(interval=cut(timestamp,4)) %>% dplyr::group_by(Hummingbird,Iplant_Double,ID,Day,interval) %>% dplyr::summarize(Yobs=sum(Yobs),ele=mean(ele,na.rm=T),Date=min(format(timestamp,"%m/%d/%Y")))  %>% mutate(Yobs=(Yobs>0)*1) %>% mutate(site=factor(ele>1700)) %>% arrange(Date)
 
 levels(datday$site)<-c("Maquipucuna","Santa Lucia")
 
-rect <- data.frame(xmin=min(as.POSIXct(datday$Date,format="%m/%d/%Y")), xmax=as.POSIXct(unique(datday$interval)[2]), ymin=-Inf, ymax=Inf)
+rect <- data.frame(xmin=min(as.POSIXct(datday$Date,format="%m/%d/%Y")), xmax=sort(as.POSIXct(unique(datday$interval)))[4], ymin=-Inf, ymax=Inf)
 
 timeplot<-datday %>% group_by(Date) %>% dplyr::summarize(n=sum(Yobs))
 
@@ -214,8 +214,8 @@ indat$jID<-as.numeric(as.factor(indat$ID))
 
 #Split data
 split_dat<-split(indat,indat$interval)
-Yobs_dat<-split_dat[[1]]
-Ynew_dat<-split_dat[[2]]
+Yobs_dat<-bind_rows(split_dat[1:3])
+Ynew_dat<-split_dat[[4]]
 ```
 
 $$ Yobs_{i,j} \sim Bernoulli(N(0,1.68)) $$
@@ -395,7 +395,6 @@ return(chains)}
 ```
 
 ```{r}
-
 ##Generate chains
 chains$Species<-getChains(models$Species)
 
@@ -526,9 +525,9 @@ chains$Species_Detect %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw
 ```
 
 ```{r,fig.height=8,fig.width=11}
-chains$Species_Detect %>% filter(parameter == "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~Hummingbird,ncol=3)
+chains$Species_Detect %>% filter(parameter == "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~Hummingbird,ncol=3,scales="free")
 ```
-# Incorportating species occurrence 
+# Incorporating species occurrence 
 
 If species co-occurrence is a prerequisite for interaction, then the absence of interactions may stem either from a lack of detectability or species absence. We can jointly model the presence of species as a function of elevation and then existance of an interaction.
 
@@ -652,7 +651,7 @@ chains$Species_Detect_Elevation %>% filter(parameter == "fitnew")  %>% ggplot(.,
 ```
 
 ```{r,fig.height=8,fig.width=11}
-chains$Species_Detect_Elevation %>% filter(parameter == "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~Hummingbird,ncol=3)
+chains$Species_Detect_Elevation %>% filter(parameter == "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~Hummingbird,ncol=3,scales="free")
 ```
 
 ### Elevation ranges
@@ -683,17 +682,22 @@ Ynew_dat$Index<-1:nrow(Ynew_dat)
 
 ## By Species
 ```{r,fig.height=7,fig.width=6}
-disc<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% group_by(Model,Hummingbird) %>% dplyr::summarize(value=mean(value))
 
-ggplot(disc,aes(x=Hummingbird,y=value,col=Model)) + geom_point()  + labs(x="Elevation",y="Mean Predictive Error") + coord_flip()
 
-#disc<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% filter(Hummingbird %in% "Stripe-throated Hermit") %>% group_by(Model,Index,ele,Yobs) %>% dplyr::summarize(value=mean(value))
+disc<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% group_by(Model,Yobs,Hummingbird) %>% dplyr::summarize(value=mean(value)) %>% filter(!Model %in% "Random")
+
+ggplot(disc,aes(x=Hummingbird,y=value,col=Model)) + geom_point()  + labs(x="Species",y="Mean Predictive Error") + coord_flip() + facet_grid(~Yobs,scales="free")
+
+stripe<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% filter(Hummingbird %in% "White-whiskered Hermit") %>% group_by(Model,Index,Yobs) %>% dplyr::summarize(value=mean(value))
+
+ggplot(stripe,aes(x=as.factor(Index),y=value,col=Model)) + geom_point()  + labs(y="Mean Predictive Error") + coord_flip() + facet_wrap(~Yobs,scales="free")
+
 ```
 
 ## Detectability
 
 ```{r}
-allchains %>% filter(parameter %in% "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=value,fill=Model)) + geom_density() + facet_wrap(~Hummingbird,scales="free")
+allchains %>% filter(parameter %in% "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=value,fill=Model)) + geom_density() + facet_wrap(~Hummingbird,scales="free") + theme_bw()
 ```
 
 ## Proportion of predicted observations
@@ -734,7 +738,7 @@ netdf %>% group_by(L1,value) %>% dplyr::summarize(n=n()) %>% spread(value,n) %>%
 paste("True presence rate is:",round(sum(obs_matrix$value==1)/(sum(obs_matrix$value==1)+sum(obs_matrix$value==0)),3)*100)
 ```
 
-```{r}
+```{r,fig.height=5,fig.width=8}
 true_positives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Model,Link,Iteration) %>% dplyr::summarize(value=max(value)) %>% filter(value==1) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==1]) %>% group_by(Model,Iteration) %>% dplyr::summarize(n=n()) %>% dplyr::summarize(mean=mean(n),lower=quantile(n,0.05),upper=quantile(n,0.95))
 
 true_negatives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Model,Link,Iteration) %>% dplyr::summarize(value=max(value)) %>% filter(value==0) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==0]) %>% group_by(Model,Iteration) %>% dplyr::summarize(n=n()) %>% dplyr::summarize(mean=mean(n),lower=quantile(n,0.05),upper=quantile(n,0.95))
@@ -765,7 +769,6 @@ allnetworks<-lapply(networks,function(x){
     })
   })
 allnetworks<-melt(allnetworks,id.var=c("Metric","value"))
-
 
 #Plot
 allnetworks<-allnetworks %>% select(Model=L1,Metric,value) %>% mutate(Level=str_extract(Model,"_(\\w+)"))%>% separate(Model,sep="_",c("Model","Detect","Elevation")) %>% select(-Detect,-Elevation) 
