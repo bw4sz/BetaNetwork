@@ -2,29 +2,37 @@ sink("models/SpeciesIdentity_Detect.jags")
 cat("
     model {
     
+    #True State for each bird, plant, camera
+    for (i in 1:Birds){
+      for(j in 1:Plants){
+        for(k in 1:Cameras){
+          logit(s[i,j,k])<-alpha[i,j]
+          phi[i,j,k]~ dbern(s[i,j,k])
+        }
+      }
+    }
+
     #Observation Model
     for (x in 1:Nobs){
       
-      #Observation Process
-      #True state
+      #Detection Process
       z[x] ~ dbern(detect[Bird[x]]) 
       
       #Observation
-      logit(s[x])<-alpha[Bird[x],Plant[x]]
-      p[x]<-z[x] * s[x]
+      p[x]<-z[x] * phi[Bird[x],Plant[x],Camera[x]]
       Yobs[x] ~ dbern(p[x])
       
       #Observed discrepancy
-      E[x]<-abs(Yobs[x]- s[x])
+      #E[x]<-abs(Yobs[x]- s[Bird[x],Plant[x],Camera[x]])
     }
     
     #Assess Model Fit - Predict remaining data
+
     for(x in 1:Nnewdata){
     
       #Generate prediction
       znew[x] ~ dbern(detect[NewBird[x]])
-      logit(snew[x])<-alpha[NewBird[x],NewPlant[x]]
-      pnew[x]<-znew[x]*snew[x]
+      pnew[x] <- znew[x]*phi[NewBird[x],NewPlant[x],NewCamera[x]]
   
       #Predicted observation
       Ynew_pred[x]~dbern(pnew[x])
@@ -57,7 +65,7 @@ cat("
     omega_tau ~ dunif(0,10)
     
     #derived posterior check
-    fit<-sum(E[]) #Discrepancy for the observed data
+    #fit<-sum(E[]) #Discrepancy for the observed data
     fitnew<-sum(Enew[])
     
     }

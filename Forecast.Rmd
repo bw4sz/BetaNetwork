@@ -444,7 +444,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
     list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred)}
   
   #Parameters to track
-  ParsStage <- c("alpha","Ynew_pred","fit","fitnew","Enew","detect")
+  ParsStage <- c("alpha","Ynew_pred","fitnew","Enew","detect")
   
   #Jags Data
   Yobs<-Yobs_dat$Yobs
@@ -459,12 +459,15 @@ runModel<-function(Yobs_dat,Ynew_dat){
     Nobs=length(Yobs),
     NewBird=Ynew_dat$jBird,
     NewPlant=Ynew_dat$jPlant,
+    Cameras=max(c(Yobs_dat$jID,Ynew_dat$jID)),
+    Camera=Yobs_dat$jID,
+    NewCamera=Ynew_dat$jID,
     Ynew=Ynew,
     Nnewdata=length(Ynew))
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=30000,n.burnin=29900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -877,6 +880,8 @@ prmodel<-prcomp(modmatrix[,-1],scale=T)
 
 ggbiplot(prmodel,alpha=0.2,varname.size = 4) + theme_bw() 
 ```
+
+TODO: What about the species that aren't in the time series, can they be predicted by random encounter.
 
 ```{r}
 save.image("ObservedModel.RData")
