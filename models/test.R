@@ -1,79 +1,125 @@
 sink("models/test.jags")
-
 cat("
     model {
-
+    
     #Observation Model
     for (x in 1:Nobs){
     
+    #Occurrence Process
+    logit(psi[x])<-alpha_occ[Bird[x]] + beta_occ[Bird[x]] * elevation[x] + beta2_occ[Bird[x]] * elevation[x]^2
+    occ[x] ~ dbern(psi[x])
+    
+    #Is the species available to be detected?
+    rho[x]<-detect[Bird[x]]*occ[x]
+    
     #Observation Process
     #True state
-    z[x] ~ dbern(detect[Bird[x]]) 
+    z[x] ~ dbern(rho[x]) 
     
     #observation
-    logit(s[x])<-alpha[Bird[x]] + beta1[Bird[x]] * Traitmatch[Bird[x],Plant[x]] 
+    logit(s[x])<-alpha[Bird[x],Plant[x]]
     p[x]<-z[x] * s[x]
     Yobs[x] ~ dbern(p[x])
     
     #Observed discrepancy
-    #E[x]<-abs(Yobs[x]-S[Bird[x],Plant[x]])
+    E[x]<-abs(Yobs[x]- s[x])
     }
     
     #Assess Model Fit - Predict remaining data
     for(x in 1:Nnewdata){
-      
-      #Generate prediction
-      znew[x] ~ dbern(detect[NewBird[x]])
-      pnew[x]<-znew[x]*alpha[NewBird[x]] + beta1[NewBird[x]] * Traitmatch[NewBird[x],NewPlant[x]] 
-      Ynew_pred[x]~dbern(pnew[x])
-      
-      #Assess fit
-      E.new[x]<-abs(Ynew[x]-Ynew_pred[x])
+    
+    #Generate prediction
+    #Occurrence Process
+    logit(psi_new[x])<-alpha_occ[NewBird[x]] + beta_occ[NewBird[x]] * elevation_new[x]
+    occ_new[x] ~ dbern(psi_new[x])
+    
+    #Is the species present to be detected?
+    rho_new[x]<-detect[NewBird[x]]*occ_new[x]
+    znew[x] ~ dbern(rho_new[x])
+    
+    logit(snew[x])<-alpha[NewBird[x],NewPlant[x]]
+    pnew[x]<-znew[x]*snew[x]
+    
+    #Predicted observation
+    Ynew_pred[x]~dbern(pnew[x])
+    
+    #Assess fit, proportion of corrected predicted links
+    Enew[x]<-abs(Ynew[x]-Ynew_pred[x])
+    
     }
     
     #Priors
+    #Note: flat logit priorsm - Following lunn 2012 p85
+    
+    
+    #Occurrence Priors
+    for(x in 1:Birds){
+    alpha_occ[x] ~ dnorm(0,0.386)
+    beta_occ[x] ~ dnorm(0,0.386)
+    beta2_occ[x] ~ dnorm(0,0.386)
+    }
+    
     #Observation model
-    #Detect priors, logit transformed - Following lunn 2012 p85
     
     for(x in 1:Birds){
-      logit(detect[x])<-dcam[x]
-      dcam[x]~dnorm(omega_mu,omega_tau)
+    logit(detect[x])<-dcam[x]
+    dcam[x]~dnorm(omega_mu,omega_tau)
     }
+    
     
     #Process Model
     #Species level priors
     for (i in 1:Birds){
-    
+    for (j in 1:Plants){
     #Intercept
     #logit prior, then transform for plotting
-    alpha[i] ~ dnorm(alpha_mu,alpha_tau)
-    
-    #Traits slope 
-    beta1[i] ~ dnorm(beta1_mu,beta1_tau)    
-    
+    alpha[i,j] ~ dnorm(0,0.386)
+    } 
     }
     
     #OBSERVATION PRIOR
     omega_mu ~ dnorm(0,0.386)
     omega_tau ~ dunif(0,10)
     
-    #Group process priors
-    
-    #Intercept 
-    alpha_mu ~ dnorm(0,0.386)
-    alpha_tau ~ dt(0,1,1)I(0,)
-    alpha_sigma<-pow(1/alpha_tau,0.5) 
-    
-    #Trait
-    beta1_mu~dnorm(0,0.386)
-    beta1_tau ~ dt(0,1,1)I(0,)
-    beta1_sigma<-pow(1/beta1_tau,0.5)
-    
     #derived posterior check
-    #fit<-sum(E[]) #Discrepancy for the observed data
-    #fitnew<-sum(E.new[])
+    fit<-sum(E[]) #Discrepancy for the observed data
+    fitnew<-sum(Enew[])
     
     }
     ",fill=TRUE)
 
 sink()
+
+#Run Model
+runModel<-function(Yobs_dat){
+  
+  #Inits
+  InitStage <- function(){
+    
+    #A blank Y matrix - all present
+    phi<-matrix(nrow=Dat$Birds,ncol=Dat$Plants,data=1)
+    list(phi=phi)}
+  
+  #Parameters to track
+  ParsStage <- c("s")
+  
+  #Jags Data
+  Yobs<-Yobs_dat$Yobs
+
+  Dat<-list(
+    Yobs=Yobs,
+    Nobs=length(Yobs),
+    Birds=max(Yobs_dat$jBird),
+    Bird=Yobs_dat$jBird,
+    Plant=Yobs_dat$jPlant,
+    Plants=max(Yobs_dat$jPlant))
+  
+  #MCMC options
+  system.time(
+    m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/test.jags",n.thin=1,n.iter=10,n.burnin=5,n.chains=2,DIC=F)
+  )
+  return(m2)
+}
+
+
+runModel(Yobs_dat=Yobs_dat)

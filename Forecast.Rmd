@@ -259,7 +259,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10000,n.burnin=9900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=2000,n.burnin=1800,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -335,7 +335,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
     list(Ynew_pred=Ynew_pred)}
   
   #Parameters to track
-  ParsStage <- c("alpha","Ynew_pred","fit","fitnew","Enew")
+  ParsStage <- c("Ynew_pred","fitnew","Enew")
   
   #Jags Data
   Yobs<-Yobs_dat$Yobs
@@ -355,7 +355,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10000,n.burnin=9900,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=2000,n.burnin=1800,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -375,14 +375,6 @@ getChains<-function(mod){
   
   #Extract index
   splitpc<-split(pc,pc$parameter)
-  
-  #single index
-  splitpc[c("alpha")]<-lapply(
-    splitpc[c("alpha")],function(x){
-    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+),(\\d+)]"))[,3:4]
-    colnames(sv)<-c("jBird","jPlant")
-    pc<-data.frame(x,sv)
-    })
   
   splitpc[c("Ynew_pred","Enew")]<-lapply(
     splitpc[c("Ynew_pred","Enew")],function(x){
@@ -434,17 +426,18 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #Inits
   InitStage <- function(){
+    
     #A blank Y matrix - all present
     initY<-rep(1,Dat$Nobs)
     initB<-rep(0.5,Dat$Birds)
     Ynew_pred<-rep(1,Dat$Nnewdata)
     z<-rep(1,Dat$Nobs)
     znew<-rep(1,Dat$Nnewdata)
-    
+
     list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred)}
   
   #Parameters to track
-  ParsStage <- c("alpha","Ynew_pred","fitnew","Enew","detect")
+  ParsStage <- c("Ynew_pred","fitnew","Enew","detect")
   
   #Jags Data
   Yobs<-Yobs_dat$Yobs
@@ -459,15 +452,12 @@ runModel<-function(Yobs_dat,Ynew_dat){
     Nobs=length(Yobs),
     NewBird=Ynew_dat$jBird,
     NewPlant=Ynew_dat$jPlant,
-    Cameras=max(c(Yobs_dat$jID,Ynew_dat$jID)),
-    Camera=Yobs_dat$jID,
-    NewCamera=Ynew_dat$jID,
     Ynew=Ynew,
     Nnewdata=length(Ynew))
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=3000,n.burnin=2800,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -487,14 +477,6 @@ getChains<-function(mod){
   
   #Extract index
   splitpc<-split(pc,pc$parameter)
-  
-  #single index
-  splitpc[c("alpha")]<-lapply(
-    splitpc[c("alpha")],function(x){
-    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+),(\\d+)]"))[,3:4]
-    colnames(sv)<-c("jBird","jPlant")
-    pc<-data.frame(x,sv)
-    })
   
   splitpc[c("Ynew_pred","Enew","detect")]<-lapply(
     splitpc[c("Ynew_pred","Enew","detect")],function(x){
@@ -550,27 +532,25 @@ source("models/SpeciesIdentity_Detect_Elevation.R")
 
 #print model
 writeLines(readLines("models/SpeciesIdentity_Detect_Elevation.R"))
-```
 
-```{r}
 #Run Model
 runModel<-function(Yobs_dat,Ynew_dat){
   
   #Inits
   InitStage <- function(){
+
     #A blank Y matrix - all present
     initY<-rep(1,Dat$Nobs)
     initB<-rep(0.5,Dat$Birds)
     Ynew_pred<-rep(1,Dat$Nnewdata)
     z<-rep(1,Dat$Nobs)
     znew<-rep(1,Dat$Nnewdata)
-    occ_new<-rep(1,Dat$Nnewdata)
-    occ<-rep(1,Dat$Nobs)
+    occ<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
     
-    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred,occ_new=occ_new,occ=occ)}
+    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred,occ=occ)}
   
   #Parameters to track
-  ParsStage <- c("alpha","Ynew_pred","fit","fitnew","Enew","alpha_occ","beta_occ","beta2_occ","detect")
+  ParsStage <- c("Ynew_pred","fitnew","Enew","alpha_occ","beta_occ","beta2_occ","detect")
   
   #Jags Data
   Yobs<-Yobs_dat$Yobs
@@ -579,11 +559,13 @@ runModel<-function(Yobs_dat,Ynew_dat){
   Dat<-list(
     Yobs=Yobs,
     Birds=max(c(Yobs_dat$jBird,Ynew_dat$jBird)),
-    elevation=Yobs_dat$ele,
-    elevation_new=Ynew_dat$ele,
+    elevation=indat %>% ungroup() %>% select(jID,ele) %>% arrange(jID) %>% distinct(jID,ele) %>% .$ele,
     Bird=Yobs_dat$jBird,
     Plant=Yobs_dat$jPlant,
     Plants=max(c(Yobs_dat$jPlant,Ynew_dat$jPlant)),
+    Cameras=max(c(Yobs_dat$jID,Ynew_dat$jID)),
+    Camera=Yobs_dat$jID,
+    NewCamera=Ynew_dat$jID,
     Nobs=length(Yobs),
     NewBird=Ynew_dat$jBird,
     NewPlant=Ynew_dat$jPlant,
@@ -591,9 +573,10 @@ runModel<-function(Yobs_dat,Ynew_dat){
     Nnewdata=length(Ynew))
   
   #MCMC options
-    system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=30000,n.burnin=29900,n.chains=2,DIC=F)
+    mtime<-system.time(
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=3000,n.burnin=2800,n.chains=2,DIC=F)
     )
+    print(mtime)
     return(m2)
 }
 
@@ -612,14 +595,6 @@ getChains<-function(mod){
   
   #Extract index
   splitpc<-split(pc,pc$parameter)
-  
-  #single index
-  splitpc[c("alpha")]<-lapply(
-    splitpc[c("alpha")],function(x){
-    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+),(\\d+)]"))[,3:4]
-    colnames(sv)<-c("jBird","jPlant")
-    pc<-data.frame(x,sv)
-    })
   
     splitpc[c("alpha_occ","beta_occ","beta2_occ","detect")]<-lapply(
     splitpc[c("alpha_occ","beta_occ","beta2_occ","detect")],function(x){
@@ -686,14 +661,13 @@ Ynew_dat$Index<-1:nrow(Ynew_dat)
 ## By Species
 ```{r,fig.height=7,fig.width=6}
 
-
 disc<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% group_by(Model,Yobs,Hummingbird) %>% dplyr::summarize(value=mean(value)) %>% filter(!Model %in% "Random")
 
 ggplot(disc,aes(x=Hummingbird,y=value,col=Model)) + geom_point()  + labs(x="Species",y="Mean Predictive Error") + coord_flip() + facet_grid(~Yobs,scales="free")
 
-stripe<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% filter(Hummingbird %in% "White-whiskered Hermit") %>% group_by(Model,Index,Yobs) %>% dplyr::summarize(value=mean(value))
+#stripe<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% filter(Hummingbird %in% "White-whiskered Hermit") %>% group_by(Model,Index,Yobs) %>% dplyr::summarize(value=mean(value))
 
-ggplot(stripe,aes(x=as.factor(Index),y=value,col=Model)) + geom_point()  + labs(y="Mean Predictive Error") + coord_flip() + facet_wrap(~Yobs,scales="free")
+#ggplot(stripe,aes(x=as.factor(Index),y=value,col=Model)) + geom_point()  + labs(y="Mean Predictive Error") + coord_flip() + facet_wrap(~Yobs,scales="free")
 
 ```
 
@@ -741,7 +715,7 @@ netdf %>% group_by(L1,value) %>% dplyr::summarize(n=n()) %>% spread(value,n) %>%
 paste("True presence rate is:",round(sum(obs_matrix$value==1)/(sum(obs_matrix$value==1)+sum(obs_matrix$value==0)),3)*100)
 ```
 
-```{r,fig.height=5,fig.width=8}
+```{r,fig.height=4,fig.width=7}
 true_positives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Model,Link,Iteration) %>% dplyr::summarize(value=max(value)) %>% filter(value==1) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==1]) %>% group_by(Model,Iteration) %>% dplyr::summarize(n=n()) %>% dplyr::summarize(mean=mean(n),lower=quantile(n,0.05),upper=quantile(n,0.95))
 
 true_negatives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Model,Link,Iteration) %>% dplyr::summarize(value=max(value)) %>% filter(value==0) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==0]) %>% group_by(Model,Iteration) %>% dplyr::summarize(n=n()) %>% dplyr::summarize(mean=mean(n),lower=quantile(n,0.05),upper=quantile(n,0.95))
@@ -750,9 +724,9 @@ false_positives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iter
 
 false_negatives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iteration=L2,Model=L1) %>% mutate(Link=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Model,Link,Iteration) %>% dplyr::summarize(value=max(value)) %>% filter(value==0) %>% filter(Link %in% obs_matrix$Link[obs_matrix$value==1]) %>% group_by(Model,Iteration) %>% dplyr::summarize(n=n()) %>% dplyr::summarize(mean=mean(n),lower=quantile(n,0.05),upper=quantile(n,0.95))
 
-conf_matrix<-melt(list(true_positives=true_positives,true_negatives=true_negatives,false_positives=false_positives,false_negatives=false_negatives)) %>% select(Model,variable,value,Metric=L1) %>% spread(Metric,value) %>% mutate(recall=true_positives/(true_positives+false_negatives),precision=true_positives/(true_positives+false_positives)) %>% select(Model,stat=variable,recall,precision) %>% melt(id.vars=c("Model","stat")) %>% dcast(Model+variable~stat)
+conf_matrix<-melt(list(true_positives=true_positives,true_negatives=true_negatives,false_positives=false_positives,false_negatives=false_negatives)) %>% select(Model,variable,value,Metric=L1) %>% spread(Metric,value) %>% mutate(accuracy=(true_positives+true_negatives)/(true_positives+true_negatives+false_positives+false_negatives),recall=true_positives/(true_positives+false_negatives),precision=true_positives/(true_positives+false_positives)) %>% select(Model,stat=variable,recall,precision,accuracy) %>% melt(id.vars=c("Model","stat")) %>% dcast(Model+variable~stat)
 
-ggplot(conf_matrix,aes(x=Model)) + facet_grid(~variable,scales="free") + geom_linerange(aes(ymin=lower,ymax=upper)) + geom_point(aes(y=mean)) + coord_flip() + theme_bw()
+ggplot(conf_matrix,aes(x=Model)) + facet_grid(~variable,scales="free") + geom_linerange(aes(ymin=lower,ymax=upper)) + geom_point(aes(y=mean)) + coord_flip() + theme_bw() + labs(y="value")
 
 #ggsave("Figures/PredLinksBoth.svg")
 #ggsave("Figures/PredLinksBoth.jpeg",height=3,width=7)
@@ -784,6 +758,129 @@ ggplot(allnetworks,aes(x=value)) + geom_density(aes(fill=Model),alpha=0.5) + fac
 ```
 
 # Predicted betadiversity
+
+Split data into wet (November - May) versus dry season (June - October)
+
+# Change in the probability of species interaction 
+
+```{r}
+indat$Month<-months(indat$Date)
+indat$Season[indat$Month %in% c("Jun","Jul","Aug","Sep","Oct")]<-"Dry"
+indat$Season[!indat$Month %in% c("Jun","Jul","Aug","Sep","Oct")]<-"Wet"
+
+timeplot<-indat %>% group_by(Date,Season) %>% dplyr::summarize(n=sum(Yobs))
+
+ggplot(timeplot,aes(x=strptime(Date,"%m/%d/%Y"),y=as.integer(n))) + geom_line(size=0.2) + geom_point(aes(col=Season)) + geom_rect(data=rect, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), fill="red",alpha=0.2,inherit.aes = FALSE) + theme_bw() + scale_x_datetime() + labs(x="Date",y="Observed Interactions") + scale_y_continuous(breaks=scales::pretty_breaks())
+
+#Split data
+split_dat<-split(indat,indat$interval)
+Yobs_dat<-bind_rows(split_dat[1:3])
+Ynew_dat<-split_dat[[4]]
+```
+
+```{r}
+#Source model
+source("models/SpeciesIdentity_Detect_Elevation_Beta.R")
+
+#print model
+writeLines(readLines("models/SpeciesIdentity_Detect_Elevation_Beta.R"))
+
+#Run Model
+runModel<-function(Yobs_dat,Ynew_dat){
+  
+  #Inits
+  InitStage <- function(){
+
+    #A blank Y matrix - all present
+    initY<-rep(1,Dat$Nobs)
+    initB<-rep(0.5,Dat$Birds)
+    Ynew_pred<-rep(1,Dat$Nnewdata)
+    z<-rep(1,Dat$Nobs)
+    znew<-rep(1,Dat$Nnewdata)
+    occ<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
+    
+    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred,occ=occ)}
+  
+  #Parameters to track
+  ParsStage <- c("Ynew_pred","fitnew","Enew","alpha_occ","beta_occ","beta2_occ","detect","alpha")
+  
+  #Jags Data
+  Yobs<-Yobs_dat$Yobs
+  Ynew<-Ynew_dat$Yobs
+  
+  Dat<-list(
+    Yobs=Yobs,
+    Seasons=length(unique(indat$Season)),
+    Birds=max(c(Yobs_dat$jBird,Ynew_dat$jBird)),
+    Season=indat %>% ungroup() %>% select(jID,Season) %>% arrange(jID) %>% distinct(jID,Season) %>% .$Season,
+    elevation=indat %>% ungroup() %>% select(jID,ele) %>% arrange(jID) %>% distinct(jID,ele) %>% .$ele,
+    Bird=Yobs_dat$jBird,
+    Plant=Yobs_dat$jPlant,
+    Plants=max(c(Yobs_dat$jPlant,Ynew_dat$jPlant)),
+    Cameras=max(c(Yobs_dat$jID,Ynew_dat$jID)),
+    Camera=Yobs_dat$jID,
+    NewCamera=Ynew_dat$jID,
+    Nobs=length(Yobs),
+    NewBird=Ynew_dat$jBird,
+    NewPlant=Ynew_dat$jPlant,
+    Ynew=Ynew,
+    Nnewdata=length(Ynew))
+  
+  #MCMC options
+    mtime<-system.time(
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
+    )
+    print(mtime)
+    return(m2)
+}
+
+models$Species_Detect_Elevation_Beta<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat)
+```
+
+```{r}
+#Get Chains
+getChains<-function(mod){
+  
+  pc<-reshape2::melt(mod$BUGSoutput$sims.array)
+  colnames(pc)<-c("Draw","chain","par","value")
+  
+  #extract parameter name
+  pc$parameter<-data.frame(str_match(pc$par,"(\\w+)"))[,-1]
+  
+  #Extract index
+  splitpc<-split(pc,pc$parameter)
+  
+    splitpc[c("alpha_occ","beta_occ","beta2_occ","detect")]<-lapply(
+    splitpc[c("alpha_occ","beta_occ","beta2_occ","detect")],function(x){
+      sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
+      pc<-data.frame(x,jBird=sv)
+    })
+    
+      splitpc[c("alpha")]<-lapply(
+  splitpc[c("alpha")],function(x){
+    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+),(\\d+),(\\d+)]"))[,3:5]
+    colnames(sv)<-c("jBird","jPlant","Season")
+    pc<-data.frame(x,jBird=sv)
+  })
+  
+  splitpc[c("Ynew_pred","Enew")]<-lapply(
+    splitpc[c("Ynew_pred","Enew")],function(x){
+    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
+    pc<-data.frame(x,Index=sv)
+    })
+    
+  chains<-bind_rows(splitpc)
+return(chains)}
+```
+
+```{r}
+##Generate chains
+chains$Species_Detect_Elevation_Beta<-getChains(models$Species_Detect_Elevation_Beta)
+
+##Generate networks
+networks$Species_Detect_Elevation_Beta<-getPredictions(chains$Species_Detect_Elevation_Beta,Ynew_dat = Ynew_dat)
+```
+
 
 Dissimilairty in interactions (Beta_WN from Poisot 2012)
 Dashed line is the observed network from the time-series.
@@ -838,12 +935,6 @@ levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "S"]<-"Specie
 ggplot(betastat %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value,fill=Model)) + geom_density(alpha=0.4) + facet_grid(Level~Betadiversity,scales="free") + geom_vline(data=mobs_dis  %>% filter(!Betadiversity %in% "Species Turnover"),aes(xintercept=value),linetype="dashed") + theme_bw()
 ```
 
-# Interaction Betadiversity
-
-```{r}
-
-```
-
 # Model overlap
 
 Create a kind of venn diagram on PCA of model similarity based on per link discrepency. 
@@ -881,7 +972,6 @@ prmodel<-prcomp(modmatrix[,-1],scale=T)
 ggbiplot(prmodel,alpha=0.2,varname.size = 4) + theme_bw() 
 ```
 
-TODO: What about the species that aren't in the time series, can they be predicted by random encounter.
 
 ```{r}
 save.image("ObservedModel.RData")

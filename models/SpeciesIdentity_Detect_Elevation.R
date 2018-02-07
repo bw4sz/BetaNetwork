@@ -15,9 +15,8 @@ cat("
           #Interaction
           logit(s[i,j,k])<-alpha[i,j]
 
-          #Conditional liklihood of interaction|occurrence
+          #Conditional probability of interaction|occurrence
           rho[i,j,k] <- s[i,j,k] * occ[i,j,k]
-          phi[i,j,k]~ dbern(rho[i,j,k] )
         }
       }
     }
@@ -29,7 +28,7 @@ cat("
     z[x] ~ dbern(detect[Bird[x]]) 
     
     #Observation, conditional on detection and occurrence.
-    p[x]<-z[x] * phi[Bird[x],Plant[x],Camera[x]]
+    p[x]<-z[x] * rho[Bird[x],Plant[x],Camera[x]]
     Yobs[x] ~ dbern(p[x])
     
     #Observed discrepancy
@@ -42,7 +41,7 @@ cat("
     
     #Generate prediction
     znew[x] ~ dbern(detect[NewBird[x]])
-    pnew[x] <- znew[x]*phi[NewBird[x],NewPlant[x],NewCamera[x]]
+    pnew[x] <- znew[x]*rho[NewBird[x],NewPlant[x],NewCamera[x]]
     
     #Predicted observation
     Ynew_pred[x]~dbern(pnew[x])
@@ -53,6 +52,14 @@ cat("
     }
     
     #Priors
+
+    #Occurrence model
+    for(x in 1:Birds){
+    alpha_occ[x] ~ dnorm(0,0.386)
+    beta_occ[x] ~ dnorm(0,0.386)
+    beta2_occ[x] ~ dnorm(0,0.386)
+    }
+
     #Observation model
     #Detect priors, logit transformed - Following lunn 2012 p85
     for(x in 1:Birds){
@@ -61,21 +68,19 @@ cat("
     }
     
     #Process Model
-    #Species level priors
     for (i in 1:Birds){
     for (j in 1:Plants){
     #Intercept
     #logit prior, then transform for plotting
     alpha[i,j] ~ dnorm(0,0.386)
-    } 
+    }
     }
     
-    #OBSERVATION PRIOR
+    #Observation group prior
     omega_mu ~ dnorm(0,0.386)
     omega_tau ~ dunif(0,10)
     
-    #derived posterior check
-    #fit<-sum(E[]) #Discrepancy for the observed data
+    #derived posterior predictive check
     fitnew<-sum(Enew[])
     
     }

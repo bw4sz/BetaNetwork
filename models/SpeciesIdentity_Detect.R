@@ -2,14 +2,11 @@ sink("models/SpeciesIdentity_Detect.jags")
 cat("
     model {
     
-    #True State for each bird, plant, camera
+    #True interaction probability for each bird, plant
     for (i in 1:Birds){
       for(j in 1:Plants){
-        for(k in 1:Cameras){
-          logit(s[i,j,k])<-alpha[i,j]
-          phi[i,j,k]~ dbern(s[i,j,k])
+          logit(s[i,j])<-alpha[i,j]
         }
-      }
     }
 
     #Observation Model
@@ -19,11 +16,8 @@ cat("
       z[x] ~ dbern(detect[Bird[x]]) 
       
       #Observation
-      p[x]<-z[x] * phi[Bird[x],Plant[x],Camera[x]]
+      p[x]<-z[x] * s[Bird[x],Plant[x]]
       Yobs[x] ~ dbern(p[x])
-      
-      #Observed discrepancy
-      #E[x]<-abs(Yobs[x]- s[Bird[x],Plant[x],Camera[x]])
     }
     
     #Assess Model Fit - Predict remaining data
@@ -32,7 +26,7 @@ cat("
     
       #Generate prediction
       znew[x] ~ dbern(detect[NewBird[x]])
-      pnew[x] <- znew[x]*phi[NewBird[x],NewPlant[x],NewCamera[x]]
+      pnew[x] <- znew[x]*s[NewBird[x],NewPlant[x]]
   
       #Predicted observation
       Ynew_pred[x]~dbern(pnew[x])
@@ -54,8 +48,7 @@ cat("
     #Species level priors
     for (i in 1:Birds){
       for (j in 1:Plants){
-        #Intercept
-        #logit prior, then transform for plotting
+        #Logit Intercept
         alpha[i,j] ~ dnorm(0,0.386)
       } 
     }
@@ -64,8 +57,7 @@ cat("
     omega_mu ~ dnorm(0,0.386)
     omega_tau ~ dunif(0,10)
     
-    #derived posterior check
-    #fit<-sum(E[]) #Discrepancy for the observed data
+    #derived posterior predictive error
     fitnew<-sum(Enew[])
     
     }

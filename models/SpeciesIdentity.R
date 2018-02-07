@@ -8,8 +8,6 @@ cat("
     logit(s[x])<-alpha[Bird[x],Plant[x]]
     Yobs[x] ~ dbern(s[x])
     
-    #Observed discrepancy
-    E[x]<-abs(Yobs[x]- s[x])
     }
     
     #Assess Model Fit - Predict remaining data
@@ -36,8 +34,7 @@ cat("
       } 
     }
 
-    #derived posterior check
-    fit<-sum(E[]) #Discrepancy for the observed data
+    #derived posterior predictive error
     fitnew<-sum(Enew[])
     }
     ",fill=TRUE)
