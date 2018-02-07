@@ -4,20 +4,20 @@
     #Ecological Process Model
     #True State for each bird, plant, camera
     for (i in 1:Birds){
-    for(j in 1:Plants){
-    for(k in 1:Cameras){
-    
-    #Occurrence 
-    logit(psi[i,j,k])<-alpha_occ[i] + beta_occ[i] * elevation[k] + beta2_occ[i] * elevation[k]^2
-    occ[i,j,k] ~ dbern(psi[i,j,k])
-    
-    #Interaction
-    logit(s[i,j,k])<-alpha[i,j,Season[k]]
-    
-    #Conditional probability of interaction|occurrence
-    rho[i,j,k] <- s[i,j,k] * occ[i,j,k]
-    }
-    }
+      for(j in 1:Plants){
+        for(k in 1:Cameras){
+          
+          #Occurrence 
+          logit(psi[i,j,k])<-alpha_occ[i] + beta_occ[i] * elevation[k] + beta2_occ[i] * elevation[k]^2
+          occ[i,j,k] ~ dbern(psi[i,j,k])
+
+          #Interaction
+          logit(s[i,j,k])<-alpha[i,j]
+
+          #Conditional probability of interaction|occurrence
+          rho[i,j,k] <- s[i,j,k] * occ[i,j,k]
+        }
+      }
     }
     
     #Observation Model
@@ -51,14 +51,14 @@
     }
     
     #Priors
-    
+
     #Occurrence model
     for(x in 1:Birds){
     alpha_occ[x] ~ dnorm(0,0.386)
     beta_occ[x] ~ dnorm(0,0.386)
     beta2_occ[x] ~ dnorm(0,0.386)
     }
-    
+
     #Observation model
     #Detect priors, logit transformed - Following lunn 2012 p85
     for(x in 1:Birds){
@@ -69,12 +69,9 @@
     #Process Model
     for (i in 1:Birds){
     for (j in 1:Plants){
-      for (k in 1:Seasons){
-        #Logit Intercept
-        alpha_mu[i,j] ~ dnorm(0,0.386)
-        alpha_tau[i,j] ~ dunif(0,10)
-        alpha[i,j,k] ~ dnorm(alpha_mu[i,j],alpha_tau[i,j])
-      }
+    #Intercept
+    #logit prior, then transform for plotting
+    alpha[i,j] ~ dnorm(0,0.386)
     }
     }
     

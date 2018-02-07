@@ -12,7 +12,7 @@
     occ[i,j,k] ~ dbern(psi[i,j,k])
     
     #Interaction
-    logit(s[i,j,k])<-alpha[i,j,Season[k]]
+    logit(s[i,j,k])<-alpha[i,j] + beta_season[i,j] *Season[k]
     
     #Conditional probability of interaction|occurrence
     rho[i,j,k] <- s[i,j,k] * occ[i,j,k]
@@ -69,12 +69,10 @@
     #Process Model
     for (i in 1:Birds){
     for (j in 1:Plants){
-      for (k in 1:Seasons){
-        #Logit Intercept
-        alpha_mu[i,j] ~ dnorm(0,0.386)
-        alpha_tau[i,j] ~ dunif(0,10)
-        alpha[i,j,k] ~ dnorm(alpha_mu[i,j],alpha_tau[i,j])
-      }
+        #Interaction probability
+        alpha[i,j] ~ dnorm(0,0.386)
+        #Effect of season
+        beta_season[i,j] ~ dnorm(0,0.386)
     }
     }
     
@@ -83,7 +81,7 @@
     omega_tau ~ dunif(0,10)
     
     #derived posterior predictive check
-    fitnew<-sum(Enew[])
+    #fitnew<-sum(Enew[])
     
     }
     

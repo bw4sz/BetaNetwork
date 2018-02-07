@@ -50,7 +50,7 @@ fulldat<-read.csv("data/fulldat.csv",row.names=1)
 fulldat$timestamp<-as.POSIXct(fulldat$timestamp)
 
 #Testing
-#fulldat<-fulldat %>% sample_n(100)
+fulldat<-fulldat %>% sample_n(100)
 ```
 
 ```{r}
@@ -259,7 +259,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=2000,n.burnin=1800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -355,7 +355,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=2000,n.burnin=1800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -457,7 +457,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=3000,n.burnin=2800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -574,7 +574,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=3000,n.burnin=2800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=10,n.burnin=0,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -757,6 +757,10 @@ levels(allnetworks$Level)<-c("","+Detect","+Detect +Elevation")
 ggplot(allnetworks,aes(x=value)) + geom_density(aes(fill=Model),alpha=0.5) + facet_grid(Level~Metric) + geom_vline(data=obs_net,aes(xintercept=value),linetype="dashed") + theme_bw()
 ```
 
+# Comparing predictors
+
+How much to do here.
+
 # Predicted betadiversity
 
 Split data into wet (November - May) versus dry season (June - October)
@@ -768,6 +772,7 @@ indat$Month<-months(indat$Date)
 indat$Season[indat$Month %in% c("Jun","Jul","Aug","Sep","Oct")]<-"Dry"
 indat$Season[!indat$Month %in% c("Jun","Jul","Aug","Sep","Oct")]<-"Wet"
 
+indat$jSeason<-as.numeric(as.factor(indat$Season))
 timeplot<-indat %>% group_by(Date,Season) %>% dplyr::summarize(n=sum(Yobs))
 
 ggplot(timeplot,aes(x=strptime(Date,"%m/%d/%Y"),y=as.integer(n))) + geom_line(size=0.2) + geom_point(aes(col=Season)) + geom_rect(data=rect, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), fill="red",alpha=0.2,inherit.aes = FALSE) + theme_bw() + scale_x_datetime() + labs(x="Date",y="Observed Interactions") + scale_y_continuous(breaks=scales::pretty_breaks())
@@ -802,7 +807,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
     list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred,occ=occ)}
   
   #Parameters to track
-  ParsStage <- c("Ynew_pred","fitnew","Enew","alpha_occ","beta_occ","beta2_occ","detect","alpha")
+  ParsStage <- c("Ynew_pred","Enew","alpha_occ","beta_occ","beta2_occ","detect","alpha","beta_season")
   
   #Jags Data
   Yobs<-Yobs_dat$Yobs
@@ -810,9 +815,8 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   Dat<-list(
     Yobs=Yobs,
-    Seasons=length(unique(indat$Season)),
     Birds=max(c(Yobs_dat$jBird,Ynew_dat$jBird)),
-    Season=indat %>% ungroup() %>% select(jID,Season) %>% arrange(jID) %>% distinct(jID,Season) %>% .$Season,
+    Season=indat %>% ungroup() %>% select(jID,jSeason) %>% arrange(jID) %>% distinct(jID,jSeason) %>% .$jSeason,
     elevation=indat %>% ungroup() %>% select(jID,ele) %>% arrange(jID) %>% distinct(jID,ele) %>% .$ele,
     Bird=Yobs_dat$jBird,
     Plant=Yobs_dat$jPlant,
@@ -856,11 +860,11 @@ getChains<-function(mod){
       pc<-data.frame(x,jBird=sv)
     })
     
-      splitpc[c("alpha")]<-lapply(
-  splitpc[c("alpha")],function(x){
-    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+),(\\d+),(\\d+)]"))[,3:5]
-    colnames(sv)<-c("jBird","jPlant","Season")
-    pc<-data.frame(x,jBird=sv)
+      splitpc[c("beta_season")]<-lapply(
+  splitpc[c("beta_season")],function(x){
+    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+),(\\d+)]"))[,3:4]
+    colnames(sv)<-c("jBird","jPlant")
+    pc<-data.frame(x,sv)
   })
   
   splitpc[c("Ynew_pred","Enew")]<-lapply(
@@ -881,58 +885,72 @@ chains$Species_Detect_Elevation_Beta<-getChains(models$Species_Detect_Elevation_
 networks$Species_Detect_Elevation_Beta<-getPredictions(chains$Species_Detect_Elevation_Beta,Ynew_dat = Ynew_dat)
 ```
 
+### Effect of season on interaction probabilities
+
+```{r}
+beta_season<-chains$Species_Detect_Elevation_Beta %>% filter(parameter %in% "beta_season") %>% mutate(Link=paste(jBird,jPlant,sep="_")) %>% group_by(jBird,Link) %>% dplyr::summarize(mean=mean(value),lower=quantile(value,0.05),upper=quantile(value,0.95))
+
+#Which contain 0 effect
+to_color<-beta_season %>% group_by(jBird,Link) %>% dplyr::summarize(sig=!(upper > 0 & lower < 0))
+  
+beta_season %>% inner_join(to_color) %>% arrange(desc(mean),desc(upper)) %>% ggplot(.,aes(x=Link)) + geom_linerange(aes(ymin=lower,ymax=upper,col=sig)) + coord_flip() + theme(axis.text.y=element_blank()) + labs(col="Effect of Season")
+```
 
 Dissimilairty in interactions (Beta_WN from Poisot 2012)
 Dashed line is the observed network from the time-series.
+
 Note that this is really a measure of dissimilairty in one level (hummimngbirds), as the dissimilarity in plants is fixed by the sampling protocol. While there be a correlation between the species pool and the chosen plant to film, this is filtered by a human placing a camera at that plant, and as such isn't a true measure of plant dissimiality.
 
 ```{r}
-#Observed dissimalarity
-m_obs<-acast(Yobs_dat,Hummingbird~Iplant_Double,value.var="Yobs",fun.aggregate = sum)
-m_new<-acast(Ynew_dat,Hummingbird~Iplant_Double,value.var="Yobs",fun.aggregate = sum)
+#Observed dissimilarity by season.
+dry_new<-acast(Ynew_dat %>% filter(Season=="Dry"),Hummingbird~Iplant_Double,value.var="Yobs",fun.aggregate = sum)
+wet_new<-acast(Ynew_dat %>% filter(Season=="Wet"),Hummingbird~Iplant_Double,value.var="Yobs",fun.aggregate = sum)
 
 #Turn into binary links
-m_obs<-m_obs > 0 * 1
-m_new<-m_new > 0 * 1
+dry_new<-dry_new > 0 * 1
+wet_new<-wet_new > 0 * 1
 
-obs_dis<-betalink(graph.incidence(m_obs),graph.incidence(m_new))
+obs_dis<-melt(betalink(graph.incidence(dry_new),graph.incidence(wet_new)))
+colnames(obs_dis)<-c("value","Betadiversity")
+
 ```
 
 ```{r,fig.height=7,fig.width=9}
-betastat<-lapply(networks,function(x){
-  lapply(x,function(y){
-    obs_dis<-betalink(graph.incidence(m_obs),graph.incidence(y))
-  })
-})
 
-betastat<-melt(betastat)
-colnames(betastat)<-c("value","Betadiversity","Iteration","Model")
+pred_beta<-function(dat,Ynew_dat){
+  Ynew_pred<-Ynew_dat %>% dplyr::select(-jinterval,-interval) %>% mutate(Index=1:nrow(Ynew_dat)) %>% inner_join(dat,by="Index")
+  
+#Wet Season
+wet_pred<-acast(Ynew_pred %>% filter(Season=="Wet"),Hummingbird~Iplant_Double,value.var="value",fun.aggregate = sum)
 
-#label models
-betastat<-betastat %>% mutate(Level=str_extract(Model,"_(\\w+)"))%>% separate(Model,sep="_",c("Model","Detect","Elevation")) %>% select(-Detect,-Elevation) 
+#Dry Season
+dry_pred<-acast(Ynew_pred %>% filter(Season=="Dry"),Hummingbird~Iplant_Double,value.var="value",fun.aggregate = sum)
 
-betastat$Level[is.na(betastat$Level)]<-""
-betastat$Level<-as.factor(betastat$Level)
-levels(betastat$Level)<-c("","+Detect","+Detect +Elevation")
+#Turn into binary links
+dry_pred<-dry_pred > 0 * 1
+wet_pred<-wet_pred > 0 * 1
 
-#Observed dis.
-mobs_dis<-melt(obs_dis)
-colnames(mobs_dis)<-c("value","Betadiversity")
+obs_dis<-melt(betalink(graph.incidence(dry_pred),graph.incidence(wet_pred)))
+return(obs_dis)
+}
 
-#recode levels to make more attractice.
+betastat<-chains$Species_Detect_Elevation_Beta %>% filter(parameter=="Ynew_pred") %>% mutate(Index=as.numeric(as.character(Index))) %>% group_by(Draw,chain) %>% do(pred_beta(.,Ynew_dat))
+colnames(betastat)<-c("Draw","chain","value","Betadiversity")
+
+#recode levels to make more attractive.
 betastat$Betadiversity<-factor(betastat$Betadiversity)
 levels(betastat$Betadiversity)[levels(betastat$Betadiversity) %in% "WN"]<-"Interaction Dissimilarity"
 levels(betastat$Betadiversity)[levels(betastat$Betadiversity) %in% "ST"]<-"Interaction Turnover"
 levels(betastat$Betadiversity)[levels(betastat$Betadiversity) %in% "OS"]<-"Interaction Rewiring"
 levels(betastat$Betadiversity)[levels(betastat$Betadiversity) %in% "S"]<-"Species Turnover"
 
-mobs_dis$Betadiversity<-factor(mobs_dis$Betadiversity)
-levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "WN"]<-"Interaction Dissimilarity"
-levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "ST"]<-"Interaction Turnover"
-levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "OS"]<-"Interaction Rewiring"
-levels(mobs_dis$Betadiversity)[levels(mobs_dis$Betadiversity) %in% "S"]<-"Species Turnover"
+obs_dis$Betadiversity<-factor(obs_dis$Betadiversity)
+levels(obs_dis$Betadiversity)[levels(obs_dis$Betadiversity) %in% "WN"]<-"Interaction Dissimilarity"
+levels(obs_dis$Betadiversity)[levels(obs_dis$Betadiversity) %in% "ST"]<-"Interaction Turnover"
+levels(obs_dis$Betadiversity)[levels(obs_dis$Betadiversity) %in% "OS"]<-"Interaction Rewiring"
+levels(obs_dis$Betadiversity)[levels(obs_dis$Betadiversity) %in% "S"]<-"Species Turnover"
 
-ggplot(betastat %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value,fill=Model)) + geom_density(alpha=0.4) + facet_grid(Level~Betadiversity,scales="free") + geom_vline(data=mobs_dis  %>% filter(!Betadiversity %in% "Species Turnover"),aes(xintercept=value),linetype="dashed") + theme_bw()
+ggplot(betastat %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value)) + geom_density(alpha=0.4,fill="black") + facet_wrap(~Betadiversity,scales="free") + geom_vline(data=obs_dis  %>% filter(!Betadiversity %in% "Species Turnover"),aes(xintercept=value),linetype="dashed") + theme_bw()
 ```
 
 # Model overlap
@@ -958,9 +976,6 @@ modmatrix<-t(spread_link[,-1])
 colnames(modmatrix)<-spread_link$Model
 prmodel<-prcomp(modmatrix,scale=T)
 
-#get best differntial labels, those which exist in the edges of the space
-#loadings<-melt(prmodel$x) %>% spread(Var2,value) %>% group_by(Var2) %>% dplyr::summarize(min(value),max(value))
-
 ggbiplot(prmodel,alpha=0.2,varname.size = 4) + theme_bw() 
 ```
 
@@ -971,7 +986,6 @@ prmodel<-prcomp(modmatrix[,-1],scale=T)
 
 ggbiplot(prmodel,alpha=0.2,varname.size = 4) + theme_bw() 
 ```
-
 
 ```{r}
 save.image("ObservedModel.RData")
