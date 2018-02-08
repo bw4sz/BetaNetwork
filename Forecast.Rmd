@@ -1,5 +1,5 @@
 ---
-title: "Dynamic models of interaction betadiversity"
+title: "Predictive models of interactions"
 output:
 html_document:
   toc: true
@@ -259,7 +259,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=5000,n.burnin=4800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -355,7 +355,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=5000,n.burnin=4800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -574,7 +574,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=30000,n.burnin=29800,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -660,7 +660,6 @@ Ynew_dat$Index<-1:nrow(Ynew_dat)
 
 ## By Species
 ```{r,fig.height=7,fig.width=6}
-
 disc<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% group_by(Model,Yobs,Hummingbird) %>% dplyr::summarize(value=mean(value)) %>% filter(!Model %in% "Random")
 
 ggplot(disc,aes(x=Hummingbird,y=value,col=Model)) + geom_point()  + labs(x="Species",y="Mean Predictive Error") + coord_flip() + facet_grid(~Yobs,scales="free")
@@ -832,7 +831,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=30000,n.burnin=29800,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -860,8 +859,8 @@ getChains<-function(mod){
       pc<-data.frame(x,jBird=sv)
     })
     
-      splitpc[c("beta_season")]<-lapply(
-  splitpc[c("beta_season")],function(x){
+      splitpc[c("beta_season","alpha")]<-lapply(
+  splitpc[c("beta_season","alpha")],function(x){
     sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+),(\\d+)]"))[,3:4]
     colnames(sv)<-c("jBird","jPlant")
     pc<-data.frame(x,sv)
@@ -885,15 +884,43 @@ chains$Species_Detect_Elevation_Beta<-getChains(models$Species_Detect_Elevation_
 networks$Species_Detect_Elevation_Beta<-getPredictions(chains$Species_Detect_Elevation_Beta,Ynew_dat = Ynew_dat)
 ```
 
+###Assess Convergence
+
+```{r,cache=FALSE,fig.width=5,fig.height=2}
+###Chains
+chains$Species_Detect_Elevation_Beta %>% filter(parameter == "beta_season")  %>% filter(jBird==5,jPlant %in% 1:5) %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~jPlant)
+```
+
 ### Effect of season on interaction probabilities
 
 ```{r}
-beta_season<-chains$Species_Detect_Elevation_Beta %>% filter(parameter %in% "beta_season") %>% mutate(Link=paste(jBird,jPlant,sep="_")) %>% group_by(jBird,Link) %>% dplyr::summarize(mean=mean(value),lower=quantile(value,0.05),upper=quantile(value,0.95))
+beta_season<-chains$Species_Detect_Elevation_Beta %>% filter(parameter %in% "beta_season") %>% mutate(Link=paste(jBird,jPlant,sep="_")) %>% group_by(jBird,jPlant,Link) %>% dplyr::summarize(mean=mean(value),lower=quantile(value,0.05),upper=quantile(value,0.95))
 
 #Which contain 0 effect
 to_color<-beta_season %>% group_by(jBird,Link) %>% dplyr::summarize(sig=!(upper > 0 & lower < 0))
+
+#Grab sig ones
+beta_season<-beta_season %>% inner_join(to_color) %>% filter(sig==T)  %>% mutate(jBird=as.numeric(as.character(jBird)),jPlant=as.numeric(as.character(jPlant))) %>% inner_join(jagsIndexBird) %>% inner_join(jagsIndexPlants) %>% arrange(desc(mean)) %>% mutate(HLink=paste(Hummingbird,Iplant_Double,sep="_"))
+
+#reorder
+beta_season$HLink<-factor(beta_season$HLink,levels=beta_season$HLink)
+
+ggplot(beta_season,aes(x=HLink)) + geom_linerange(aes(ymin=lower,ymax=upper,col=sig)) + coord_flip() + labs(col="Effect of Season")
+
+#Calculate probabilities for those interactions.
+seasonf<-function(dat,season){
   
-beta_season %>% inner_join(to_color) %>% arrange(desc(mean),desc(upper)) %>% ggplot(.,aes(x=Link)) + geom_linerange(aes(ymin=lower,ymax=upper,col=sig)) + coord_flip() + theme(axis.text.y=element_blank()) + labs(col="Effect of Season")
+  p=inv.logit(dat$alpha + dat$beta_season * season)
+  data.frame(Hummingbird=unique(dat$Hummingbird),Iplant_Double=unique(dat$Iplant_Double),alpha=dat$alpha,beta_season=dat$beta_season,Season=season,p)
+}
+
+seasonplot<-chains$Species_Detect_Elevation_Beta %>% filter(parameter %in% c("alpha","beta_season")) %>% mutate(Link=paste(jBird,jPlant,sep="_")) %>% filter(Link %in% beta_season$Link) %>% select(-par,-Index)%>% dcast( ... ~ parameter,value.var="value") %>% mutate(jBird=as.numeric(as.character(jBird)),jPlant=as.numeric(as.character(jPlant))) %>% inner_join(jagsIndexBird) %>% inner_join(jagsIndexPlants) %>% group_by(Draw,chain,Hummingbird,Iplant_Double,Link) %>%  do(seasonf(dat=.,season=unique(Yobs_dat$jSeason))) %>% mutate(HLink=paste(Hummingbird,Iplant_Double,sep="_"))
+
+#recode season
+seasonplot$Season<-as.factor(seasonplot$Season)
+levels(seasonplot$Season)<-c("Dry","Wet")
+
+ggplot(seasonplot,aes(x=HLink,y=p)) + geom_boxplot(aes(fill=Season)) + coord_flip() + labs(y="Probability of interaction",x="Link")
 ```
 
 Dissimilairty in interactions (Beta_WN from Poisot 2012)
