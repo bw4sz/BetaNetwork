@@ -1,9 +1,9 @@
 ---
-title: "Predictive models of interactions"
+title: "Predictive models of species interactions"
 output:
 html_document:
   toc: true
-  numbered_sections: true
+  number_sections: true
   theme: spacelab
   keep_md: true
 editor_options: 
@@ -512,11 +512,10 @@ chains$Species_Detect %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw
 ```{r,fig.height=8,fig.width=11}
 chains$Species_Detect %>% filter(parameter == "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~Hummingbird,ncol=3,scales="free")
 ```
-# Incorporating species occurrence 
+# Species Identity + Detection + Elevation
 
 If species co-occurrence is a prerequisite for interaction, then the absence of interactions may stem either from a lack of detectability or species absence. We can jointly model the presence of species as a function of elevation and then existance of an interaction.
 
-## Species Identity
 Observation Model:
 
 $$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega_i) $$
@@ -574,7 +573,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=30000,n.burnin=29800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=50000,n.burnin=49800,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -632,7 +631,7 @@ chains$Species_Detect_Elevation %>% filter(parameter == "fitnew")  %>% ggplot(.,
 chains$Species_Detect_Elevation %>% filter(parameter == "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~Hummingbird,ncol=3,scales="free")
 ```
 
-### Elevation ranges
+### Predicted elevation ranges
 
 ```{r}
 elev_sim<-function(jBird,alpha,beta,beta2,elevation){
@@ -659,10 +658,10 @@ Ynew_dat$Index<-1:nrow(Ynew_dat)
 ```
 
 ## By Species
-```{r,fig.height=7,fig.width=6}
+```{r,fig.height=7,fig.width=8}
 disc<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% group_by(Model,Yobs,Hummingbird) %>% dplyr::summarize(value=mean(value)) %>% filter(!Model %in% "Random")
 
-ggplot(disc,aes(x=Hummingbird,y=value,col=Model)) + geom_point()  + labs(x="Species",y="Mean Predictive Error") + coord_flip() + facet_grid(~Yobs,scales="free")
+ggplot(disc,aes(x=Hummingbird,y=value,col=Model)) + geom_point(size=2)  + labs(x="Species",y="Mean Predictive Error") + coord_flip() + facet_grid(~Yobs,scales="free") + theme_bw()
 
 #stripe<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% filter(Hummingbird %in% "White-whiskered Hermit") %>% group_by(Model,Index,Yobs) %>% dplyr::summarize(value=mean(value))
 
@@ -673,7 +672,7 @@ ggplot(disc,aes(x=Hummingbird,y=value,col=Model)) + geom_point()  + labs(x="Spec
 ## Detectability
 
 ```{r}
-allchains %>% filter(parameter %in% "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=value,fill=Model)) + geom_density() + facet_wrap(~Hummingbird,scales="free") + theme_bw()
+allchains %>% filter(parameter %in% "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=value,fill=Model)) + geom_density() + facet_wrap(~Hummingbird,scales="free") + theme_bw() + scale_fill_manual(values=c("grey60","black"))
 ```
 
 ## Proportion of predicted observations
@@ -774,7 +773,7 @@ indat$Season[!indat$Month %in% c("Jun","Jul","Aug","Sep","Oct")]<-"Wet"
 indat$jSeason<-as.numeric(as.factor(indat$Season))
 timeplot<-indat %>% group_by(Date,Season) %>% dplyr::summarize(n=sum(Yobs))
 
-ggplot(timeplot,aes(x=strptime(Date,"%m/%d/%Y"),y=as.integer(n))) + geom_line(size=0.2) + geom_point(aes(col=Season)) + geom_rect(data=rect, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), fill="red",alpha=0.2,inherit.aes = FALSE) + theme_bw() + scale_x_datetime() + labs(x="Date",y="Observed Interactions") + scale_y_continuous(breaks=scales::pretty_breaks())
+ggplot(timeplot,aes(x=strptime(Date,"%m/%d/%Y"),y=as.integer(n))) + geom_line(size=0.2) + geom_point(aes(col=Season)) + geom_rect(data=rect, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), fill="red",alpha=0.2,inherit.aes = FALSE) + theme_bw() + scale_x_datetime() + labs(x="Date",y="Observed Interactions") + scale_y_continuous(breaks=scales::pretty_breaks()) + scale_color_manual(values=c("grey60","black"))
 
 #Split data
 split_dat<-split(indat,indat$interval)
@@ -831,7 +830,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=30000,n.burnin=29800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=50000,n.burnin=49700,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -914,13 +913,13 @@ seasonf<-function(dat,season){
   data.frame(Hummingbird=unique(dat$Hummingbird),Iplant_Double=unique(dat$Iplant_Double),alpha=dat$alpha,beta_season=dat$beta_season,Season=season,p)
 }
 
-seasonplot<-chains$Species_Detect_Elevation_Beta %>% filter(parameter %in% c("alpha","beta_season")) %>% mutate(Link=paste(jBird,jPlant,sep="_")) %>% filter(Link %in% beta_season$Link) %>% select(-par,-Index)%>% dcast( ... ~ parameter,value.var="value") %>% mutate(jBird=as.numeric(as.character(jBird)),jPlant=as.numeric(as.character(jPlant))) %>% inner_join(jagsIndexBird) %>% inner_join(jagsIndexPlants) %>% group_by(Draw,chain,Hummingbird,Iplant_Double,Link) %>%  do(seasonf(dat=.,season=unique(Yobs_dat$jSeason))) %>% mutate(HLink=paste(Hummingbird,Iplant_Double,sep="_"))
+seasonplot<-chains$Species_Detect_Elevation_Beta %>% filter(parameter %in% c("alpha","beta_season")) %>% mutate(Link=paste(jBird,jPlant,sep="_")) %>% filter(Link %in% beta_season$Link) %>% select(-par,-Index)%>% dcast( ... ~ parameter,value.var="value") %>% mutate(jBird=as.numeric(as.character(jBird)),jPlant=as.numeric(as.character(jPlant))) %>% inner_join(jagsIndexBird) %>% inner_join(jagsIndexPlants) %>% group_by(Draw,chain,Hummingbird,Iplant_Double,Link) %>%  do(seasonf(dat=.,season=unique(Yobs_dat$jSeason))) %>%  mutate(HLink=paste(Hummingbird,Iplant_Double,sep="_")) %>% group_by(Hummingbird,Iplant_Double,HLink,Season) %>% dplyr::summarize(mean=mean(p),lower=quantile(p,0.05),upper=quantile(p,0.95))
 
 #recode season
 seasonplot$Season<-as.factor(seasonplot$Season)
 levels(seasonplot$Season)<-c("Dry","Wet")
 
-ggplot(seasonplot,aes(x=HLink,y=p)) + geom_boxplot(aes(fill=Season)) + coord_flip() + labs(y="Probability of interaction",x="Link")
+ggplot(seasonplot,aes(x=HLink)) + geom_pointrange(aes(y=mean,ymin=lower,ymax=upper,col=Season),position = position_dodge(width=0.2))  + labs(y="Probability of interaction",x="Link") + coord_flip() + theme_bw() + scale_color_manual(values=c("grey60","black"))
 ```
 
 Dissimilairty in interactions (Beta_WN from Poisot 2012)
