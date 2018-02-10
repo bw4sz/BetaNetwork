@@ -1,5 +1,4 @@
-sink("models/Trait_Detect_Elevation.jags")
-cat("
+
     model {
     
     #Ecological Process Model
@@ -13,7 +12,7 @@ cat("
     occ[i,j,k] ~ dbern(psi[i,j,k])
     
     #Interaction
-    logit(s[i,j,k])<- alpha[Bird[x]] + beta_trait[Bird[x]] * Traitmatch[Bird[x],Plant[x]] 
+    logit(s[i,j,k])<-alpha[i] + beta_trait[i] * Traitmatch[i,j] + beta_season[i] *Season[k] + beta_int[i] *Season[k] *  Traitmatch[i,j]  
     
     #Conditional probability of interaction|occurrence
     rho[i,j,k] <- s[i,j,k] * occ[i,j,k]
@@ -69,21 +68,23 @@ cat("
     
     #Process Model
     for (i in 1:Birds){
-    for (j in 1:Plants){
-    #Intercept
-    #logit prior, then transform for plotting
-    alpha[i,j] ~ dnorm(0,0.386)
+        
+        #Interaction probability
+        alpha[i] ~ dnorm(0,0.386)
+        
+        #Effect of season
+        beta_trait[i] ~ dnorm(0,0.386)
+        beta_season[i] ~ dnorm(0,0.386)
+        beta_int[i] ~ dnorm(0,0.386)
     }
-    }
+    
     
     #Observation group prior
     omega_mu ~ dnorm(0,0.386)
     omega_tau ~ dunif(0,10)
     
     #derived posterior predictive check
-    fitnew<-sum(Enew[])
+    #fitnew<-sum(Enew[])
     
     }
-    ",fill=TRUE)
-
-sink()
+    
