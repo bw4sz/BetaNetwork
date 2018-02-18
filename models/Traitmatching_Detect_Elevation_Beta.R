@@ -55,16 +55,16 @@ cat("
     
     #Occurrence model
     for(x in 1:Birds){
-    alpha_occ[x] ~ dnorm(0,0.386)
-    beta_occ[x] ~ dnorm(0,0.386)
-    beta2_occ[x] ~ dnorm(0,0.386)
+      alpha_occ[x] ~ dnorm(0,0.386)
+      beta_occ[x] ~ dnorm(0,0.386)
+      beta2_occ[x] ~ dnorm(0,0.386)
     }
     
     #Observation model
     #Detect priors, logit transformed - Following lunn 2012 p85
     for(x in 1:Birds){
-    logit(detect[x])<-dcam[x]
-    dcam[x]~dnorm(omega_mu,omega_tau)
+      logit(detect[x])<-dcam[x]
+      dcam[x]~dnorm(omega_mu,omega_tau)
     }
     
     #Process Model

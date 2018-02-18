@@ -2,88 +2,66 @@ sink("models/test.jags")
 cat("
     model {
     
+    #Ecological Process Model - True interaction state
+    for (i in 1:Birds){
+    for(j in 1:Plants){
+  
+      #Interaction
+      logit(s[i,j])<-alpha[i,j]
+
+      for(k in 1:Cameras){
+    
+        #Occurrence 
+        logit(psi[i,j,k])<-alpha_occ[i] + beta_occ[i] * elevation[k] 
+        occ[i,j,k] ~ dbern(psi[i,j,k])
+    
+        #Conditional probability of interaction|occurrence
+        rho[i,j,k] <- s[i,j] * occ[i,j,k]
+        p[i,j,k] ~ dbern(rho[i,j,k])
+    }
+
+    }
+    }
+
+    
     #Observation Model
     for (x in 1:Nobs){
     
-    #Occurrence Process
-    logit(psi[x])<-alpha_occ[Bird[x]] + beta_occ[Bird[x]] * elevation[x] + beta2_occ[Bird[x]] * elevation[x]^2
-    occ[x] ~ dbern(psi[x])
-    
-    #Is the species available to be detected?
-    rho[x]<-detect[Bird[x]]*occ[x]
-    
-    #Observation Process
-    #True state
-    z[x] ~ dbern(rho[x]) 
-    
-    #observation
-    logit(s[x])<-alpha[Bird[x],Plant[x]]
-    p[x]<-z[x] * s[x]
-    Yobs[x] ~ dbern(p[x])
-    
-    #Observed discrepancy
-    E[x]<-abs(Yobs[x]- s[x])
-    }
-    
-    #Assess Model Fit - Predict remaining data
-    for(x in 1:Nnewdata){
-    
-    #Generate prediction
-    #Occurrence Process
-    logit(psi_new[x])<-alpha_occ[NewBird[x]] + beta_occ[NewBird[x]] * elevation_new[x]
-    occ_new[x] ~ dbern(psi_new[x])
-    
-    #Is the species present to be detected?
-    rho_new[x]<-detect[NewBird[x]]*occ_new[x]
-    znew[x] ~ dbern(rho_new[x])
-    
-    logit(snew[x])<-alpha[NewBird[x],NewPlant[x]]
-    pnew[x]<-znew[x]*snew[x]
-    
-    #Predicted observation
-    Ynew_pred[x]~dbern(pnew[x])
-    
-    #Assess fit, proportion of corrected predicted links
-    Enew[x]<-abs(Ynew[x]-Ynew_pred[x])
-    
+    #Detection Process
+    z[x] <- detect[Bird[x]] * p[Bird[x],Plant[x],Camera[x]]
+
+    #Observation, conditional on detection and occurrence.
+    Yobs[x] ~ dbern(z[x])
+
     }
     
     #Priors
-    #Note: flat logit priorsm - Following lunn 2012 p85
     
-    
-    #Occurrence Priors
+    #Occurrence model
     for(x in 1:Birds){
     alpha_occ[x] ~ dnorm(0,0.386)
     beta_occ[x] ~ dnorm(0,0.386)
-    beta2_occ[x] ~ dnorm(0,0.386)
     }
     
     #Observation model
-    
+    #Detect priors, logit transformed - Following lunn 2012 p85
     for(x in 1:Birds){
     logit(detect[x])<-dcam[x]
     dcam[x]~dnorm(omega_mu,omega_tau)
     }
     
-    
     #Process Model
-    #Species level priors
     for (i in 1:Birds){
     for (j in 1:Plants){
     #Intercept
     #logit prior, then transform for plotting
     alpha[i,j] ~ dnorm(0,0.386)
-    } 
+    }
     }
     
-    #OBSERVATION PRIOR
+    #Observation group prior
     omega_mu ~ dnorm(0,0.386)
     omega_tau ~ dunif(0,10)
-    
-    #derived posterior check
-    fit<-sum(E[]) #Discrepancy for the observed data
-    fitnew<-sum(Enew[])
     
     }
     ",fill=TRUE)
@@ -108,9 +86,12 @@ runModel<-function(Yobs_dat){
 
   Dat<-list(
     Yobs=Yobs,
+    elevation=Yobs_dat$ele,
     Nobs=length(Yobs),
     Birds=max(Yobs_dat$jBird),
     Bird=Yobs_dat$jBird,
+    Cameras=max(Yobs_dat$jID),
+    Camera=Yobs_dat$jID,
     Plant=Yobs_dat$jPlant,
     Plants=max(Yobs_dat$jPlant))
   

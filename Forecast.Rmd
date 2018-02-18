@@ -218,10 +218,6 @@ Yobs_dat<-bind_rows(split_dat[1:3])
 Ynew_dat<-split_dat[[4]]
 ```
 
-$$ Yobs_{i,j} \sim Bernoulli(N(0,1.68)) $$
-
-Note that this is a random probability of interaction on a per observation basis. This is different than a random link model. If we are interested in a binary network, a random interaction probability model will lead to a link probability of 1-(1/2)^n in n sampling events.
-
 ```{r}
 #Source model
 source("models/SpeciesIdentity.R")
@@ -315,8 +311,6 @@ chains$Random %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw,y=value
 
 ## Species Identity
 
-$$ Yobs_{i,j} \sim Bernoulli(\lambda_{i,j}) $$
-
 ```{r}
 #Source model
 source("models/SpeciesIdentity.R")
@@ -355,7 +349,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10000,n.burnin=9600,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -403,15 +397,6 @@ chains$Species %>% filter(parameter == "fitnew")  %>% ggplot(.,aes(x=Draw,y=valu
 
 # Detectability + Species Identity
 
-Observation Model:
-
-$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega_i) $$
-
-Process Model:
-
-$$ N_{i,j,k} \sim Binomial(\lambda_{i,j}) $$
-$$ Yobs_{i,j} \sim Bernoulli(\lambda_{i,j}) $$
-
 ```{r}
 #Source model
 source("models/SpeciesIdentity_Detect.R")
@@ -457,7 +442,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=10000,n.burnin=9600,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -514,17 +499,6 @@ chains$Species_Detect %>% filter(parameter == "detect") %>% mutate(jBird=as.nume
 ```
 # Species Identity + Detection + Elevation
 
-If species co-occurrence is a prerequisite for interaction, then the absence of interactions may stem either from a lack of detectability or species absence. We can jointly model the presence of species as a function of elevation and then existance of an interaction.
-
-Observation Model:
-
-$$ Yobs_{i,j,k,d} \sim Binomial(N_{i,j,k},\omega_i) $$
-
-Process Model:
-
-$$ N_{i,j,k} \sim Binomial(\lambda_{i,j}) $$
-$$ Yobs_{i,j} \sim Bernoulli(\lambda_{i,j}) $$
-
 ```{r}
 #Source model
 source("models/SpeciesIdentity_Detect_Elevation.R")
@@ -573,7 +547,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=50000,n.burnin=49800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=80000,n.burnin=79600,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -641,7 +615,10 @@ elev_sim<-function(jBird,alpha,beta,beta2,elevation){
 
 bird_range <- chains$Species_Detect_Elevation %>% filter(parameter %in% c("alpha_occ","beta_occ","beta2_occ")) %>% select(-par) %>% spread(parameter,value) %>% group_by(jBird,Draw,chain) %>% do(elev_sim(.$jBird,.$alpha_occ,.$beta_occ,.$beta2_occ,elevation=unique(Ynew_dat$ele))) %>% mutate(jBird=as.numeric(as.character(jBird))) %>% inner_join(jagsIndexBird) %>% group_by(Hummingbird,elevation) %>% dplyr::summarise(mean=mean(p),lower=quantile(p,0.05),upper=quantile(p,0.95))
  
-ggplot(bird_range,aes(x=elevation))  + geom_line(aes(y=mean)) + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2) + facet_wrap(~Hummingbird) + labs(x="Elevation",y="Probability of Occurrence")
+#Scientific names
+ggplot(bird_range,aes(x=elevation))  + geom_line(aes(y=mean)) + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2) + facet_wrap(~Hummingbird,ncol=4) + labs(x="Elevation",y="Probability of Occurrence") + theme_bw()
+ggsave("Figures/Elevation_ranges.jpeg",height=8,width=11)
+
 ```
 
 # Model Comparison
@@ -663,6 +640,10 @@ disc<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(In
 
 ggplot(disc,aes(x=Hummingbird,y=value,col=Model)) + geom_point(size=2)  + labs(x="Species",y="Mean Predictive Error") + coord_flip() + facet_grid(~Yobs,scales="free") + theme_bw()
 
+disc<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% group_by(Model,Yobs) %>% dplyr::summarize(mean=mean(value)) %>% filter(!Model %in% "Random")
+
+ggplot(disc,aes(x=Model,y=mean)) + geom_point(size=2)  + labs(x="Species",y="Mean Predictive Error") + coord_flip() + facet_grid(~Yobs,scales="free") + theme_bw()
+ggsave("Data/PredError.svg",height=2,width=4)
 #stripe<-allchains %>% filter(parameter %in% "Enew") %>% mutate(Index=as.numeric(Index)) %>% inner_join(Ynew_dat,by="Index") %>% filter(Hummingbird %in% "White-whiskered Hermit") %>% group_by(Model,Index,Yobs) %>% dplyr::summarize(value=mean(value))
 
 #ggplot(stripe,aes(x=as.factor(Index),y=value,col=Model)) + geom_point()  + labs(y="Mean Predictive Error") + coord_flip() + facet_wrap(~Yobs,scales="free")
@@ -724,9 +705,12 @@ false_negatives<-netdf %>% select(Hummingbird=Var1,Iplant_Double=Var2,value,Iter
 
 conf_matrix<-melt(list(true_positives=true_positives,true_negatives=true_negatives,false_positives=false_positives,false_negatives=false_negatives)) %>% select(Model,variable,value,Metric=L1) %>% spread(Metric,value) %>% mutate(accuracy=(true_positives+true_negatives)/(true_positives+true_negatives+false_positives+false_negatives),recall=true_positives/(true_positives+false_negatives),precision=true_positives/(true_positives+false_positives)) %>% select(Model,stat=variable,recall,precision,accuracy) %>% melt(id.vars=c("Model","stat")) %>% dcast(Model+variable~stat)
 
-ggplot(conf_matrix,aes(x=Model)) + facet_grid(~variable,scales="free") + geom_linerange(aes(ymin=lower,ymax=upper)) + geom_point(aes(y=mean)) + coord_flip() + theme_bw() + labs(y="value")
+ggplot(conf_matrix,aes(x=Model)) + facet_grid(~variable,scales="free") + geom_linerange(aes(ymin=lower,ymax=upper)) + geom_point(aes(y=mean)) + coord_flip() + theme_bw() + labs(y="value") + scale_y_continuous(breaks = pretty_breaks())
 
-#ggsave("Figures/PredLinksBoth.svg")
+ggplot(conf_matrix %>% filter(variable == "accuracy"),aes(x=Model)) + facet_grid(~variable,scales="free") + geom_linerange(aes(ymin=lower,ymax=upper)) + geom_point(aes(y=mean),alpha=0.7) + coord_flip() + theme_bw() + labs(y="value") + scale_y_continuous(breaks = pretty_breaks())
+
+ggsave("Figures/Accuracy.jpg",height=2,width=4)
+ggsave("Figures/Accuracy.svg",height=2,width=4)
 #ggsave("Figures/PredLinksBoth.jpeg",height=3,width=7)
 ```
 
@@ -755,6 +739,21 @@ levels(allnetworks$Level)<-c("","+Detect","+Detect +Elevation")
 ggplot(allnetworks,aes(x=value)) + geom_density(aes(fill=Model),alpha=0.5) + facet_grid(Level~Metric) + geom_vline(data=obs_net,aes(xintercept=value),linetype="dashed") + theme_bw()
 ```
 
+```{r}
+#Get network statistics for all models.
+allnetworks<-lapply(networks,function(x){
+    lapply(x,function(y){
+      d<-networklevel(y,index=c("connectance"),level="lower")
+      return(data.frame(Metric=names(d),value=d))
+    })
+  })
+allnetworks<-melt(allnetworks,id.var=c("Metric","value"))
+
+allnetworks %>% select(Metric,value,Iteraction=L2,Model=L1) %>% filter(Metric %in% "connectance",!Model %in% "Species_Detect_Elevation_Beta") %>% group_by(Model,Metric) %>% dplyr::summarize(mean=mean(value),upper=quantile(value,0.95),lower=quantile(value,0.05)) %>%  ggplot(.,aes(x=Model)) + geom_pointrange(aes(y=mean,ymin=lower,ymax=upper),alpha=1) + facet_grid(~Metric) + geom_hline(data=obs_net %>% filter(Metric %in% "connectance"),aes(yintercept=value),linetype="dashed") + theme_bw() + coord_flip() + labs(y="value")
+ggsave("Figures/Connectance.jpg",height=2,width=4)
+ggsave("Figures/Connectance.svg",height=2,width=4)
+```
+
 # Comparing predictors
 
 How much to do here.
@@ -773,7 +772,8 @@ indat$Season[!indat$Month %in% c("Jun","Jul","Aug","Sep","Oct")]<-"Wet"
 indat$jSeason<-as.numeric(as.factor(indat$Season))
 timeplot<-indat %>% group_by(Date,Season) %>% dplyr::summarize(n=sum(Yobs))
 
-ggplot(timeplot,aes(x=strptime(Date,"%m/%d/%Y"),y=as.integer(n))) + geom_line(size=0.2) + geom_point(aes(col=Season)) + geom_rect(data=rect, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), fill="red",alpha=0.2,inherit.aes = FALSE) + theme_bw() + scale_x_datetime() + labs(x="Date",y="Observed Interactions") + scale_y_continuous(breaks=scales::pretty_breaks()) + scale_color_manual(values=c("grey60","black"))
+ggplot(timeplot,aes(x=strptime(Date,"%m/%d/%Y"),y=as.integer(n))) + geom_line(size=0.2) + geom_point(aes(col=Season)) + geom_rect(data=rect, aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), fill="red",alpha=0.1,inherit.aes = FALSE) + theme_bw() + scale_x_datetime() + labs(x="Date",y="Observed Interactions") + scale_y_continuous(breaks=scales::pretty_breaks()) + scale_color_manual(values=c("grey60","black"))
+ggsave("Figures/timeplot.jpg",height=4,width=8)
 
 #Split data
 split_dat<-split(indat,indat$interval)
@@ -830,7 +830,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=50000,n.burnin=49700,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=80000,n.burnin=79600,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -919,7 +919,8 @@ seasonplot<-chains$Species_Detect_Elevation_Beta %>% filter(parameter %in% c("al
 seasonplot$Season<-as.factor(seasonplot$Season)
 levels(seasonplot$Season)<-c("Dry","Wet")
 
-ggplot(seasonplot,aes(x=HLink)) + geom_pointrange(aes(y=mean,ymin=lower,ymax=upper,col=Season),position = position_dodge(width=0.2))  + labs(y="Probability of interaction",x="Link") + coord_flip() + theme_bw() + scale_color_manual(values=c("grey60","black"))
+ggplot(seasonplot,aes(x=HLink)) + geom_pointrange(aes(y=mean,ymin=lower,ymax=upper,col=Season),position = position_dodge(width=0.5))  + labs(y="Probability of interaction",x="Link") + coord_flip() + theme_bw() + scale_color_manual(values=c("grey60","black"))
+ggsave("Figures/SpeciesBetadiversity.svg",height=3,width=6.5)
 ```
 
 Dissimilairty in interactions (Beta_WN from Poisot 2012)
@@ -977,6 +978,9 @@ levels(obs_dis$Betadiversity)[levels(obs_dis$Betadiversity) %in% "OS"]<-"Interac
 levels(obs_dis$Betadiversity)[levels(obs_dis$Betadiversity) %in% "S"]<-"Species Turnover"
 
 ggplot(betastat %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value)) + geom_density(alpha=0.4,fill="black") + facet_wrap(~Betadiversity,scales="free") + geom_vline(data=obs_dis  %>% filter(!Betadiversity %in% "Species Turnover"),aes(xintercept=value),linetype="dashed") + theme_bw()
+ggsave("Figures/Turnover.svg",height=2,width=6)
+ggsave("Figures/Turnover.jpeg",height=2,width=6)
+
 ```
 
 # Model overlap

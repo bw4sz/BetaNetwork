@@ -42,7 +42,7 @@ paste("Run Completed at",Sys.time())
 
 ```{r}
 #reload if needed
-#load("ObservedModel.RData")
+#load("TraitmatchingModel.RData")
 ```
 
 ```{r}
@@ -50,7 +50,7 @@ fulldat<-read.csv("data/fulldat.csv",row.names=1)
 fulldat$timestamp<-as.POSIXct(fulldat$timestamp)
 
 #Testing
-fulldat<-fulldat %>% sample_n(100)
+#fulldat<-fulldat %>% sample_n(100)
 ```
 
 ```{r}
@@ -275,7 +275,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/Traitmatching_Detect_Elevation_Beta.jags",n.thin=2,n.iter=30000,n.burnin=29600,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/Traitmatching_Detect_Elevation_Beta.jags",n.thin=2,n.iter=100000,n.burnin=98000,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -330,7 +330,7 @@ networks$Trait_Detect_Elevation_Beta<-getPredictions(chains$Trait_Detect_Elevati
 
 ###Assess Convergence
 
-```{r,cache=FALSE,fig.width=5,fig.height=2}
+```{r,cache=FALSE,fig.width=5,fig.height=6}
 ###Chains
 chains$Trait_Detect_Elevation_Beta %>% filter(parameter == "beta_int") %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~jBird)
 ```
@@ -351,6 +351,39 @@ beta_int$Hummingbird<-factor(beta_int$Hummingbird,levels=beta_int$Hummingbird)
 
 ggplot(beta_int,aes(x=Hummingbird)) + geom_pointrange(aes(y=mean,ymin=lower,ymax=upper,col=sig),size=1) + coord_flip() + labs(col="Effect of Season on Trait-matching") + theme(legend.position = "bottom") + theme_bw() + scale_color_manual(values=c("grey60","black"))
 ```
+
+# Show two examples
+```{r}
+#get trait points
+tindat<-indat %>% inner_join(traitmelt) %>% group_by(jBird) %>% distinct(Traitmatch,jSeason)
+
+indat_traits<-indat %>% inner_join(traitmelt)
+
+calc_int<-function(dat){
+  tmatch<-tindat %>% filter(jBird %in% dat$jBird) %>% .$Traitmatch
+  season<-tindat %>% filter(jBird %in% dat$jBird) %>% .$jSeason
+  
+  p<-inv.logit(dat$alpha+dat$beta_season*season+dat$beta_trait*tmatch+dat$beta_int*season*tmatch)
+  data.frame(jBird=dat$jBird,p=p,tmatch=tmatch,jSeason=season)
+}
+
+inteffect<-chains$Trait_Detect_Elevation_Beta %>% filter(parameter %in% c("alpha","beta_trait","beta_season","beta_int")) %>% select(-par) %>% spread(parameter,value) %>% group_by(Draw,chain,jBird) %>% do(calc_int(.)) %>% group_by(jBird,tmatch,jSeason) %>% dplyr::summarize(mean=mean(p),lower=quantile(p,0.05),upper=quantile(p,0.95)) %>% mutate(jBird=as.integer(jBird)) %>% inner_join(jagsIndexBird)
+
+#Add season labels
+inteffect<-indat %>% ungroup() %>% distinct(Season,jSeason) %>% inner_join(inteffect)
+ggplot(inteffect,aes(x=tmatch)) + geom_ribbon(aes(ymin=lower,ymax=upper,fill=Season),alpha=0.5) + geom_line(aes(y=mean,col=Season),linetype="dashed",size=0.5) + facet_wrap(~Hummingbird) + theme_bw()+ geom_point(data=indat_traits ,aes(x=Traitmatch,y=Yobs),size=0.7)
+
+#Add in elevation
+ggplot() + geom_point(data=indat_traits,aes(x=Traitmatch,y=Yobs,col=ele),size=1) + scale_color_continuous(low="blue",high="red") + geom_ribbon(data=inteffect,aes(x=tmatch,ymin=lower,ymax=upper,fill=Season),alpha=0.5) + geom_line(data=inteffect,aes(x=tmatch,y=mean,group=Season),linetype="dashed",size=0.5) + facet_wrap(~Hummingbird) + theme_bw() 
+
+ggplot(data=indat_traits,aes(x=Traitmatch,y=Yobs,col=ele)) + geom_point(size=0.7)  + facet_wrap(~Hummingbird) + scale_color_continuous(low="blue",high="red")
+
+#ggplot(inteffect %>% filter(Hummingbird %in% "Green-fronted Lancebill","Collared Inca"),aes(x=tmatch,y=mean)) + geom_ribbon(aes(ymin=lower,ymax=upper,fill=Season),alpha=0.5) + geom_line(aes(y=mean,col=Season),linetype="dashed",size=0.5) + facet_wrap(~jBird) + 
+
+  #geom_point(data=indat %>% inner_join(traitmelt) ,aes(x=Traitmatch,y=Yobs),size=0.7) 
+
+```
+
 
 ```{r}
 #Assign names.
@@ -378,6 +411,20 @@ ggplot(disc,aes(x=Hummingbird,y=value)) + geom_point(size=2)  + labs(x="Species"
 
 ```{r}
 allchains %>% filter(parameter %in% "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=value)) + geom_density(fill="black") + facet_wrap(~Hummingbird,scales="free") + theme_bw() + scale_fill_manual(values=c("grey60","black"))
+```
+
+
+### Predicted elevation ranges
+
+```{r}
+elev_sim<-function(jBird,alpha,beta,beta2,elevation){
+  p<-inv.logit(alpha+beta*elevation+beta2*elevation^2)
+  data.frame(jBird=jBird,elevation=elevation,p=p)
+}
+
+bird_range <- chains$Trait_Detect_Elevation_Beta %>% filter(parameter %in% c("alpha_occ","beta_occ","beta2_occ")) %>% select(-par) %>% spread(parameter,value) %>% group_by(jBird,Draw,chain) %>% do(elev_sim(.$jBird,.$alpha_occ,.$beta_occ,.$beta2_occ,elevation=unique(Ynew_dat$ele))) %>% mutate(jBird=as.numeric(as.character(jBird))) %>% inner_join(jagsIndexBird) %>% group_by(Hummingbird,elevation) %>% dplyr::summarise(mean=mean(p),lower=quantile(p,0.05),upper=quantile(p,0.95))
+
+ggplot(bird_range,aes(x=elevation))  + geom_line(aes(y=mean)) + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2) + facet_wrap(~Hummingbird,ncol=4) + labs(x="Elevation",y="Probability of Occurrence") + theme_bw()
 ```
 
 ## Proportion of predicted links
