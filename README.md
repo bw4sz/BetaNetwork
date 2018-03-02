@@ -1,9 +1,14 @@
 # Towards a predictive model of species interaction betadiversity
 
 MS submitted to Ecology Letters in the “Perspective” category. 
+
 Catherine H. Graham1^* and Ben G. Weinstein2^
+
 1 Swiss Federal Research Institute (WSL), Birmensdorf, Zurich. catherine.graham@wsl.ch
-2 Department of Fisheries and Wildlife, Marine Mammal Institute, Oregon State University, 2030 Marine Science Drive, Newport, OR 97365, USA. weinsteb@oregonstate.edu
+
+2 Department of Fisheries and Wildlife, Marine Mammal Institute, Oregon State University, 2030 Marine Science Drive, Newport, 
+OR 97365, USA. weinsteb@oregonstate.edu
+
 *Corresponding author 
 ^ authors contributed equally to this work.
 
