@@ -1,37 +1,16 @@
-## Welcome to GitHub Pages
+# Towards a predictive model of species interaction betadiversity
 
-You can use the [editor on GitHub](https://github.com/bw4sz/BetaNetwork/edit/master/README.md) to maintain and preview the content for your website in Markdown files.
+MS submitted to Ecology Letters in the “Perspective” category. 
+Catherine H. Graham1^* and Ben G. Weinstein2^
+1 Swiss Federal Research Institute (WSL), Birmensdorf, Zurich. catherine.graham@wsl.ch
+2 Department of Fisheries and Wildlife, Marine Mammal Institute, Oregon State University, 2030 Marine Science Drive, Newport, OR 97365, USA. weinsteb@oregonstate.edu
+*Corresponding author 
+^ authors contributed equally to this work.
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+ABSTRACT
+Species interactions are fundamental to community dynamics and ecosystem processes. Despite significant progress in describing the connections among species, we lack a comprehensive view of when interactions should change across time and space. By focusing on interaction beta-diversity, which considers both spatial and temporal species turnover and the change in the intensity of interactions, we can connect changes in local interactions with regional biodiversity. Here we discuss the biological insights and methodological concepts surrounding interaction beta-diversity, as well as outline a Bayesian approach to predicting species interaction intensity based on the biotic and abiotic environment. Integrating statistical models of local interactions with biogeographic and evolutionary histories of co-occurring species will provide new insight into the mechanisms that drive variation in patterns of biodiversity. 
 
-### Markdown
+[Data](https://github.com/bw4sz/BetaNetwork/tree/master/data)
+[Analysis](https://github.com/bw4sz/BetaNetwork/blob/master/Forecast.html)
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
 
-```markdown
-Syntax highlighted code block
-
-# Header 1
-## Header 2
-### Header 3
-
-- Bulleted
-- List
-
-1. Numbered
-2. List
-
-**Bold** and _Italic_ and `Code` text
-
-[Link](url) and ![Image](src)
-```
-
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/bw4sz/BetaNetwork/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
