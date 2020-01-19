@@ -255,7 +255,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10000,n.burnin=9800,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=30000,n.burnin=29500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -329,7 +329,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
     list(Ynew_pred=Ynew_pred)}
   
   #Parameters to track
-  ParsStage <- c("Ynew_pred","fitnew","Enew")
+  ParsStage <- c("Ynew_pred","fitnew","Enew","alpha")
   
   #Jags Data
   Yobs<-Yobs_dat$Yobs
@@ -349,7 +349,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=10000,n.burnin=9600,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity.jags",n.thin=1,n.iter=30000,n.burnin=29500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -413,16 +413,14 @@ runModel<-function(Yobs_dat,Ynew_dat){
   InitStage <- function(){
     
     #A blank Y matrix - all present
-    initY<-rep(1,Dat$Nobs)
     initB<-rep(0.5,Dat$Birds)
     Ynew_pred<-rep(1,Dat$Nnewdata)
-    z<-rep(1,Dat$Nobs)
-    znew<-rep(1,Dat$Nnewdata)
+    z<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
 
-    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred)}
+    list(dcam=initB,Ynew_pred=Ynew_pred,z=z)}
   
   #Parameters to track
-  ParsStage <- c("Ynew_pred","fitnew","Enew","detect")
+  ParsStage <- c("Ynew_pred","fitnew","Enew","detect","alpha")
   
   #Jags Data
   Yobs<-Yobs_dat$Yobs
@@ -432,6 +430,9 @@ runModel<-function(Yobs_dat,Ynew_dat){
     Yobs=Yobs,
     Birds=max(c(Yobs_dat$jBird,Ynew_dat$jBird)),
     Bird=Yobs_dat$jBird,
+    Cameras=max(c(Yobs_dat$jID,Ynew_dat$jID)),
+    Camera=Yobs_dat$jID,
+    NewCamera=Ynew_dat$jID,
     Plant=Yobs_dat$jPlant,
     Plants=max(c(Yobs_dat$jPlant,Ynew_dat$jPlant)),
     Nobs=length(Yobs),
@@ -442,7 +443,8 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=1,n.iter=10000,n.burnin=9600,n.chains=2,DIC=F)
+      m2<-jags(data=
+      Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect.jags",n.thin=2,n.iter=30000,n.burnin=29500,n.chains=2,DIC=F)
     )
     return(m2)
 }
@@ -513,17 +515,15 @@ runModel<-function(Yobs_dat,Ynew_dat){
   InitStage <- function(){
 
     #A blank Y matrix - all present
-    initY<-rep(1,Dat$Nobs)
     initB<-rep(0.5,Dat$Birds)
     Ynew_pred<-rep(1,Dat$Nnewdata)
-    z<-rep(1,Dat$Nobs)
-    znew<-rep(1,Dat$Nnewdata)
     occ<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
-    
-    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred,occ=occ)}
+    z<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
+
+    list(dcam=initB,Ynew_pred=Ynew_pred,occ=occ,z=z)}
   
   #Parameters to track
-  ParsStage <- c("Ynew_pred","fitnew","Enew","alpha_occ","beta_occ","beta2_occ","detect")
+  ParsStage <- c("Ynew_pred","fitnew","alpha","Enew","alpha_occ","beta_occ","detect")
   
   #Jags Data
   Yobs<-Yobs_dat$Yobs
@@ -547,7 +547,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=80000,n.burnin=79600,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation.jags",n.thin=1,n.iter=80000,n.burnin=79500,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -569,8 +569,8 @@ getChains<-function(mod){
   #Extract index
   splitpc<-split(pc,pc$parameter)
   
-    splitpc[c("alpha_occ","beta_occ","beta2_occ","detect")]<-lapply(
-    splitpc[c("alpha_occ","beta_occ","beta2_occ","detect")],function(x){
+    splitpc[c("alpha_occ","beta_occ","detect")]<-lapply(
+    splitpc[c("alpha_occ","beta_occ","detect")],function(x){
       sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
       pc<-data.frame(x,jBird=sv)
     })
@@ -608,12 +608,12 @@ chains$Species_Detect_Elevation %>% filter(parameter == "detect") %>% mutate(jBi
 ### Predicted elevation ranges
 
 ```{r}
-elev_sim<-function(jBird,alpha,beta,beta2,elevation){
-  p<-inv.logit(alpha+beta*elevation+beta2*elevation^2)
+elev_sim<-function(jBird,alpha,beta,elevation){
+  p<-inv.logit(alpha+beta*elevation)
   data.frame(jBird=jBird,elevation=elevation,p=p)
 }
 
-bird_range <- chains$Species_Detect_Elevation %>% filter(parameter %in% c("alpha_occ","beta_occ","beta2_occ")) %>% select(-par) %>% spread(parameter,value) %>% group_by(jBird,Draw,chain) %>% do(elev_sim(.$jBird,.$alpha_occ,.$beta_occ,.$beta2_occ,elevation=unique(Ynew_dat$ele))) %>% mutate(jBird=as.numeric(as.character(jBird))) %>% inner_join(jagsIndexBird) %>% group_by(Hummingbird,elevation) %>% dplyr::summarise(mean=mean(p),lower=quantile(p,0.05),upper=quantile(p,0.95))
+bird_range <- chains$Species_Detect_Elevation %>% filter(parameter %in% c("alpha_occ","beta_occ")) %>% select(-par) %>% spread(parameter,value) %>% group_by(jBird,Draw,chain) %>% do(elev_sim(.$jBird,.$alpha_occ,.$beta_occ,elevation=unique(Ynew_dat$ele))) %>% mutate(jBird=as.numeric(as.character(jBird))) %>% inner_join(jagsIndexBird) %>% group_by(Hummingbird,elevation) %>% dplyr::summarise(mean=mean(p),lower=quantile(p,0.05),upper=quantile(p,0.95))
  
 #Scientific names
 ggplot(bird_range,aes(x=elevation))  + geom_line(aes(y=mean)) + geom_ribbon(aes(ymin=lower,ymax=upper),alpha=0.2) + facet_wrap(~Hummingbird,ncol=4) + labs(x="Elevation",y="Probability of Occurrence") + theme_bw()
@@ -654,6 +654,7 @@ ggsave("Data/PredError.svg",height=2,width=4)
 
 ```{r}
 allchains %>% filter(parameter %in% "detect") %>% mutate(jBird=as.numeric(jBird)) %>% inner_join(jagsIndexBird) %>% ggplot(.,aes(x=value,fill=Model)) + geom_density() + facet_wrap(~Hummingbird,scales="free") + theme_bw() + scale_fill_manual(values=c("grey60","black"))
+ggsave("Figures/ElevDetection.jpeg",height=7,width=11)
 ```
 
 ## Proportion of predicted observations
@@ -707,7 +708,7 @@ conf_matrix<-melt(list(true_positives=true_positives,true_negatives=true_negativ
 
 ggplot(conf_matrix,aes(x=Model)) + facet_grid(~variable,scales="free") + geom_linerange(aes(ymin=lower,ymax=upper)) + geom_point(aes(y=mean)) + coord_flip() + theme_bw() + labs(y="value") + scale_y_continuous(breaks = pretty_breaks())
 
-ggplot(conf_matrix %>% filter(variable == "accuracy"),aes(x=Model)) + facet_grid(~variable,scales="free") + geom_linerange(aes(ymin=lower,ymax=upper)) + geom_point(aes(y=mean),alpha=0.7) + coord_flip() + theme_bw() + labs(y="value") + scale_y_continuous(breaks = pretty_breaks())
+ggplot(conf_matrix %>% filter(variable == "accuracy"),aes(x=Model)) + geom_linerange(aes(ymin=lower,ymax=upper),size=2)  + coord_flip() + theme_bw() + labs(y="Prediction Accuracy") + scale_y_continuous(breaks = pretty_breaks())
 
 ggsave("Figures/Accuracy.jpg",height=2,width=4)
 ggsave("Figures/Accuracy.svg",height=2,width=4)
@@ -749,20 +750,18 @@ allnetworks<-lapply(networks,function(x){
   })
 allnetworks<-melt(allnetworks,id.var=c("Metric","value"))
 
-allnetworks %>% select(Metric,value,Iteraction=L2,Model=L1) %>% filter(Metric %in% "connectance",!Model %in% "Species_Detect_Elevation_Beta") %>% group_by(Model,Metric) %>% dplyr::summarize(mean=mean(value),upper=quantile(value,0.95),lower=quantile(value,0.05)) %>%  ggplot(.,aes(x=Model)) + geom_pointrange(aes(y=mean,ymin=lower,ymax=upper),alpha=1) + facet_grid(~Metric) + geom_hline(data=obs_net %>% filter(Metric %in% "connectance"),aes(yintercept=value),linetype="dashed") + theme_bw() + coord_flip() + labs(y="value")
+allnetworks %>% select(Metric,value,Iteraction=L2,Model=L1) %>% filter(Metric %in% "connectance",!Model %in% "Species_Detect_Elevation_Beta") %>% group_by(Model,Metric) %>% dplyr::summarize(mean=mean(value),upper=quantile(value,0.95),lower=quantile(value,0.05)) %>%  ggplot(.,aes(x=Model)) + geom_linerange(aes(ymin=lower,ymax=upper),size=2) + geom_hline(data=obs_net %>% filter(Metric %in% "connectance"),aes(yintercept=value),linetype="dashed") + theme_bw() + coord_flip() + labs(y="Connectance")+ scale_y_continuous(breaks = pretty_breaks())
+
 ggsave("Figures/Connectance.jpg",height=2,width=4)
 ggsave("Figures/Connectance.svg",height=2,width=4)
 ```
 
-# Comparing predictors
-
-How much to do here.
 
 # Predicted betadiversity
 
 Split data into wet (November - May) versus dry season (June - October)
 
-# Change in the probability of species interaction 
+## Rewiring: Change in the probability of species interaction 
 
 ```{r}
 indat$Month<-months(indat$Date)
@@ -795,17 +794,14 @@ runModel<-function(Yobs_dat,Ynew_dat){
   InitStage <- function(){
 
     #A blank Y matrix - all present
-    initY<-rep(1,Dat$Nobs)
     initB<-rep(0.5,Dat$Birds)
     Ynew_pred<-rep(1,Dat$Nnewdata)
-    z<-rep(1,Dat$Nobs)
-    znew<-rep(1,Dat$Nnewdata)
     occ<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
-    
-    list(dcam=initB,znew=znew,z=z,Ynew_pred=Ynew_pred,occ=occ)}
+    z<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
+    list(dcam=initB,z=z,Ynew_pred=Ynew_pred,occ=occ)}
   
   #Parameters to track
-  ParsStage <- c("Ynew_pred","Enew","alpha_occ","beta_occ","beta2_occ","detect","alpha","beta_season")
+  ParsStage <- c("Ynew_pred","Enew","alpha_occ","beta_occ","detect","alpha","beta_season")
   
   #Jags Data
   Yobs<-Yobs_dat$Yobs
@@ -830,7 +826,7 @@ runModel<-function(Yobs_dat,Ynew_dat){
   
   #MCMC options
     mtime<-system.time(
-      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=80000,n.burnin=79600,n.chains=2,DIC=F)
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_Beta.jags",n.thin=1,n.iter=80000,n.burnin=79500,n.chains=2,DIC=F)
     )
     print(mtime)
     return(m2)
@@ -852,8 +848,8 @@ getChains<-function(mod){
   #Extract index
   splitpc<-split(pc,pc$parameter)
   
-    splitpc[c("alpha_occ","beta_occ","beta2_occ","detect")]<-lapply(
-    splitpc[c("alpha_occ","beta_occ","beta2_occ","detect")],function(x){
+    splitpc[c("alpha_occ","beta_occ","detect")]<-lapply(
+    splitpc[c("alpha_occ","beta_occ","detect")],function(x){
       sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
       pc<-data.frame(x,jBird=sv)
     })
@@ -921,6 +917,9 @@ levels(seasonplot$Season)<-c("Dry","Wet")
 
 ggplot(seasonplot,aes(x=HLink)) + geom_pointrange(aes(y=mean,ymin=lower,ymax=upper,col=Season),position = position_dodge(width=0.5))  + labs(y="Probability of interaction",x="Link") + coord_flip() + theme_bw() + scale_color_manual(values=c("grey60","black"))
 ggsave("Figures/SpeciesBetadiversity.svg",height=3,width=6.5)
+
+ggplot(seasonplot,aes(x=HLink)) + geom_pointrange(aes(y=mean,ymin=lower,ymax=upper,col=Season),position = position_dodge(width=0.5))  + labs(y="Probability of interaction",x="Link") + coord_flip() + theme_bw() 
+ggsave("Figures/SpeciesBetadiversity.svg",height=3,width=6.5)
 ```
 
 Dissimilairty in interactions (Beta_WN from Poisot 2012)
@@ -981,6 +980,191 @@ ggplot(betastat %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value))
 ggsave("Figures/Turnover.svg",height=2,width=6)
 ggsave("Figures/Turnover.jpeg",height=2,width=6)
 
+```
+
+## Turnover: Change in the probability of species occurrence 
+```{r}
+#Source model
+source("models/SpeciesIdentity_Detect_Elevation_SeasonOcc.R")
+
+#print model
+writeLines(readLines("models/SpeciesIdentity_Detect_Elevation_SeasonOcc.R"))
+
+#Run Model
+runModel<-function(Yobs_dat,Ynew_dat){
+  
+  #Inits
+  InitStage <- function(){
+
+    #A blank Y matrix - all present
+    initB<-rep(0.5,Dat$Birds)
+    Ynew_pred<-rep(1,Dat$Nnewdata)
+    occ<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
+    z<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
+    list(dcam=initB,z=z,Ynew_pred=Ynew_pred,occ=occ)}
+  
+  #Parameters to track
+  ParsStage <- c("Ynew_pred","Enew","alpha_occ","beta_occ","beta_int","detect","alpha","beta_season")
+  
+  #Jags Data
+  Yobs<-Yobs_dat$Yobs
+  Ynew<-Ynew_dat$Yobs
+  
+  Dat<-list(
+    Yobs=Yobs,
+    Birds=max(c(Yobs_dat$jBird,Ynew_dat$jBird)),
+    Season=indat %>% ungroup() %>% select(jID,jSeason) %>% arrange(jID) %>% distinct(jID,jSeason) %>% .$jSeason,
+    elevation=indat %>% ungroup() %>% select(jID,ele) %>% arrange(jID) %>% distinct(jID,ele) %>% .$ele,
+    Bird=Yobs_dat$jBird,
+    Plant=Yobs_dat$jPlant,
+    Plants=max(c(Yobs_dat$jPlant,Ynew_dat$jPlant)),
+    Cameras=max(c(Yobs_dat$jID,Ynew_dat$jID)),
+    Camera=Yobs_dat$jID,
+    NewCamera=Ynew_dat$jID,
+    Nobs=length(Yobs),
+    NewBird=Ynew_dat$jBird,
+    NewPlant=Ynew_dat$jPlant,
+    Ynew=Ynew,
+    Nnewdata=length(Ynew))
+  
+  #MCMC options
+    mtime<-system.time(
+      m2<-jags(data=Dat,parameters.to.save=ParsStage,inits=InitStage,model.file="models/SpeciesIdentity_Detect_Elevation_SeasonOcc.jags",n.thin=1,n.iter=80000,n.burnin=79500,n.chains=2,DIC=F)
+    )
+    print(mtime)
+    return(m2)
+}
+
+models$Species_Detect_Elevation_SeasonOcc<-runModel(Yobs_dat=Yobs_dat,Ynew_dat=Ynew_dat)
+```
+
+```{r}
+#Get Chains
+getChains<-function(mod){
+  
+  pc<-reshape2::melt(mod$BUGSoutput$sims.array)
+  colnames(pc)<-c("Draw","chain","par","value")
+  
+  #extract parameter name
+  pc$parameter<-data.frame(str_match(pc$par,"(\\w+)"))[,-1]
+  
+  #Extract index
+  splitpc<-split(pc,pc$parameter)
+  
+    splitpc[c("alpha_occ","beta_occ","beta_int","beta_season","detect")]<-lapply(
+    splitpc[c("alpha_occ","beta_occ","beta_int","beta_season","detect")],function(x){
+      sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
+      pc<-data.frame(x,jBird=sv)
+    })
+    
+      splitpc[c("alpha")]<-lapply(
+  splitpc[c("alpha")],function(x){
+    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+),(\\d+)]"))[,3:4]
+    colnames(sv)<-c("jBird","jPlant")
+    pc<-data.frame(x,sv)
+  })
+  
+  splitpc[c("Ynew_pred","Enew")]<-lapply(
+    splitpc[c("Ynew_pred","Enew")],function(x){
+    sv<-data.frame(str_match(x$par,"(\\w+)\\[(\\d+)]"))[,3]
+    pc<-data.frame(x,Index=sv)
+    })
+    
+  chains<-bind_rows(splitpc)
+return(chains)}
+```
+
+```{r}
+##Generate chains
+chains$Species_Detect_Elevation_SeasonOcc<-getChains(models$Species_Detect_Elevation_SeasonOcc)
+
+##Generate networks
+networks$Species_Detect_Elevation_SeasonOcc<-getPredictions(chains$Species_Detect_Elevation_SeasonOcc,Ynew_dat = Ynew_dat)
+```
+
+###Assess Convergence
+
+```{r,cache=FALSE,fig.width=5,fig.height=2}
+###Chains
+chains$Species_Detect_Elevation_SeasonOcc %>% filter(parameter == "beta_int")  %>% ggplot(.,aes(x=Draw,y=value,col=as.factor(chain))) + geom_line()  + theme_bw() + labs(col="Chain") + facet_wrap(~jBird)
+```
+
+### Predicted elevation ranges
+
+```{r}
+elev_sim_int<-function(dat,elevation,seasons){
+  out<-list()
+  for (y in 1:length(seasons)){
+      p=inv.logit(dat$alpha_occ + dat$beta_occ * elevation + dat$beta_season * seasons[y] + dat$beta_int * elevation * seasons[y])
+        out[[y]]<-data.frame(jBird=unique(dat$jBird),alpha_occ=dat$alpha_occ,beta_occ=dat$beta_occ,beta_season=dat$beta_season,beta_int=dat$beta_int,season=seasons[y],elevation=elevation,p)
+  }
+  return(bind_rows(out))
+}
+
+bird_range_int <- chains$Species_Detect_Elevation_SeasonOcc %>% filter(parameter %in% c("alpha_occ","beta_occ","beta_int","beta_season")) %>% select(-par) %>% spread(parameter,value) %>% group_by(jBird,Draw,chain) %>% do(elev_sim_int(.,elevation=unique(Ynew_dat$ele),seasons=unique(Ynew_dat$jSeason))) %>% mutate(jBird=as.numeric(as.character(jBird))) %>% inner_join(jagsIndexBird) %>% group_by(Hummingbird,elevation,season) %>% dplyr::summarise(mean=mean(p),lower=quantile(p,0.05),upper=quantile(p,0.95))
+ 
+#recode season
+bird_range_int$season<-as.factor(bird_range_int$season)
+levels(bird_range_int$season)<-c("Dry","Wet")
+
+#Scientific names
+ggplot(bird_range_int,aes(x=elevation,col=season))  + geom_line(aes(y=mean))+ geom_ribbon(aes(ymin=lower,ymax=upper,fill=season),alpha=0.2) + facet_wrap(~Hummingbird,ncol=4) + labs(x="Elevation",y="Probability of Occurrence") + theme_bw()
+ggsave("Figures/Elevation_ranges_int.jpeg",height=8,width=11)
+ggsave("Figures/Elevation_ranges_int.svg",height=8,width=11)
+```
+
+### Effect of season on occurrence probabilities
+
+```{r}
+beta_int<-chains$Species_Detect_Elevation_SeasonOcc %>% filter(parameter %in% "beta_int") %>% mutate(Link=paste(jBird,sep="_")) %>% group_by(jBird) %>% dplyr::summarize(mean=mean(value),lower=quantile(value,0.05),upper=quantile(value,0.95)) 
+
+#Which contain 0 effect
+to_color<-beta_int %>% group_by(jBird) %>% dplyr::summarize(sig=!(upper > 0 & lower < 0))
+
+#Grab sig ones
+beta_int<-beta_int %>% inner_join(to_color) %>% mutate(jBird=as.numeric(as.character(jBird))) %>% inner_join(jagsIndexBird)  %>% arrange(desc(mean)) 
+
+#reorder
+beta_int$Hummingbird<-factor(beta_int$Hummingbird,levels=beta_int$Hummingbird)
+
+ggplot(beta_int,aes(x=Hummingbird)) + geom_linerange(aes(ymin=lower,ymax=upper,col=sig)) + coord_flip() + labs(col="Effect of Season")
+
+#just plot the sig ones
+toplot<-bird_range_int %>% dplyr::filter(Hummingbird %in% beta_int[beta_int$sig==T,"Hummingbird"]$Hummingbird)
+
+ggplot(toplot %>% filter(!Hummingbird %in% c("Hoary Puffleg","Rufous-tailed Hummingbird")) ,aes(x=elevation,col=season))  + geom_line(aes(y=mean))+ geom_ribbon(aes(ymin=lower,ymax=upper,fill=season),alpha=0.2) + facet_wrap(~Hummingbird,ncol=3) + labs(x="Elevation",y="Probability of Occurrence",fill="Season",col="Season") + theme_bw() 
+ggsave("Figures/Elevseason.svg",height=6,width=10)
+ggsave("Figures/Elevseason.jpg",height=6,width=10)
+```
+
+Dissimilairty in interactions (Beta_WN from Poisot 2012)
+Dashed line is the observed network from the time-series.
+
+Note that this is really a measure of dissimilairty in one level (hummimngbirds), as the dissimilarity in plants is fixed by the sampling protocol. While there be a correlation between the species pool and the chosen plant to film, this is filtered by a human placing a camera at that plant, and as such isn't a true measure of plant dissimiality.
+
+```{r,fig.height=7,fig.width=9}
+
+betastat_occ<-chains$Species_Detect_Elevation_SeasonOcc %>% filter(parameter=="Ynew_pred") %>% mutate(Index=as.numeric(as.character(Index))) %>% group_by(Draw,chain) %>% do(pred_beta(.,Ynew_dat))
+colnames(betastat_occ)<-c("Draw","chain","value","Betadiversity")
+
+#recode levels to make more attractive.
+betastat_occ$Betadiversity<-factor(betastat_occ$Betadiversity)
+levels(betastat_occ$Betadiversity)[levels(betastat_occ$Betadiversity) %in% "WN"]<-"Interaction Dissimilarity"
+levels(betastat_occ$Betadiversity)[levels(betastat_occ$Betadiversity) %in% "ST"]<-"Interaction Turnover"
+levels(betastat_occ$Betadiversity)[levels(betastat_occ$Betadiversity) %in% "OS"]<-"Interaction Rewiring"
+levels(betastat_occ$Betadiversity)[levels(betastat_occ$Betadiversity) %in% "S"]<-"Species Turnover"
+
+ggplot(betastat_occ %>% filter(!Betadiversity %in% "Species Turnover"),aes(x=value)) + geom_density(alpha=0.4,fill="black") + facet_wrap(~Betadiversity,scales="free") + geom_vline(data=obs_dis  %>% filter(!Betadiversity %in% "Species Turnover"),aes(xintercept=value),linetype="dashed") + theme_bw()
+ggsave("Figures/OccTurnover.svg",height=2,width=6)
+ggsave("Figures/OccTurnover.jpeg",height=2,width=6)
+```
+
+# Sample interaction
+
+```{r,eval=F}
+
+samp<-allchains %>% filter(jBird %in% 2,parameter=="alpha") %>% group_by(Model,jPlant) %>% mutate(value=inv.logit(value))%>% dplyr::summarize(mean=mean(value),lower=quantile(value,0.05),upper=quantile(value,0.95))
+ggplot(data=samp,aes(x=jPlant)) + geom_pointrange(aes(y=mean,ymin=lower,ymax=upper)) 
 ```
 
 # Model overlap

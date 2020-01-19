@@ -8,7 +8,7 @@
         for(k in 1:Cameras){
           
           #Occurrence 
-          logit(psi[i,j,k])<-alpha_occ[i] + beta_occ[i] * elevation[k] + beta2_occ[i] * elevation[k]^2
+          logit(psi[i,j,k])<-alpha_occ[i] + beta_occ[i] * elevation[k]
           occ[i,j,k] ~ dbern(psi[i,j,k])
 
           #Interaction
@@ -16,6 +16,8 @@
 
           #Conditional probability of interaction|occurrence
           rho[i,j,k] <- s[i,j,k] * occ[i,j,k]
+
+          z[i,j,k] ~ dbern(rho[i,j,k])
         }
       }
     }
@@ -23,30 +25,24 @@
     #Observation Model
     for (x in 1:Nobs){
     
-    #Detection Process
-    z[x] ~ dbern(detect[Bird[x]]) 
-    
     #Observation, conditional on detection and occurrence.
-    p[x]<-z[x] * rho[Bird[x],Plant[x],Camera[x]]
+    p[x]<-detect[Bird[x]] * z[Bird[x],Plant[x],Camera[x]]
     Yobs[x] ~ dbern(p[x])
-    
-    #Observed discrepancy
-    #E[x]<-abs(Yobs[x]- s[Bird[x],Plant[x],Camera[x]])
+
     }
     
     #Assess Model Fit - Predict remaining data
     
     for(x in 1:Nnewdata){
     
-    #Generate prediction
-    znew[x] ~ dbern(detect[NewBird[x]])
-    pnew[x] <- znew[x]*rho[NewBird[x],NewPlant[x],NewCamera[x]]
-    
-    #Predicted observation
-    Ynew_pred[x]~dbern(pnew[x])
-    
-    #Assess fit, proportion of corrected predicted links
-    Enew[x]<-abs(Ynew[x]-Ynew_pred[x])
+      #Generate prediction
+      pnew[x]<-detect[NewBird[x]] * z[NewBird[x],NewPlant[x],NewCamera[x]]
+      
+      #Predicted observation
+      Ynew_pred[x]~dbern(pnew[x])
+      
+      #Assess fit, proportion of corrected predicted links
+      Enew[x]<-abs(Ynew[x]-Ynew_pred[x])
     
     }
     
@@ -54,24 +50,25 @@
 
     #Occurrence model
     for(x in 1:Birds){
-    alpha_occ[x] ~ dnorm(0,0.386)
-    beta_occ[x] ~ dnorm(0,0.386)
-    beta2_occ[x] ~ dnorm(0,0.386)
+      alpha_occ[x] ~ dnorm(0,0.386)
+      beta_occ[x] ~ dnorm(0,0.386)
+      beta_season[x] ~ dnorm(0,0.386)
+      beta_int[x] ~ dnorm(0,0.386)
     }
 
     #Observation model
     #Detect priors, logit transformed - Following lunn 2012 p85
     for(x in 1:Birds){
-    logit(detect[x])<-dcam[x]
-    dcam[x]~dnorm(omega_mu,omega_tau)
+      logit(detect[x])<-dcam[x]
+      dcam[x]~dnorm(omega_mu,omega_tau)
     }
     
     #Process Model
     for (i in 1:Birds){
     for (j in 1:Plants){
-    #Intercept
-    #logit prior, then transform for plotting
-    alpha[i,j] ~ dnorm(0,0.386)
+      #Intercept
+      #logit prior, then transform for plotting
+      alpha[i,j] ~ dnorm(0,0.386)
     }
     }
     

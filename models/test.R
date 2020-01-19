@@ -75,8 +75,12 @@ runModel<-function(Yobs_dat){
   InitStage <- function(){
     
     #A blank Y matrix - all present
-    phi<-matrix(nrow=Dat$Birds,ncol=Dat$Plants,data=1)
-    list(phi=phi)}
+    initY<-rep(1,Dat$Nobs)
+    initB<-rep(0.5,Dat$Birds)
+    occ<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
+    p<-array(dim=c(Dat$Birds,Dat$Plants,Dat$Cameras),data=1)
+    
+    list(dcam=initB,occ=occ,p=p)}
   
   #Parameters to track
   ParsStage <- c("s")
